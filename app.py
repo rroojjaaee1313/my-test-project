@@ -19,9 +19,9 @@ try:
         st.error("❌ 找不到 API 金鑰，請檢查 Streamlit Secrets 設定。")
         st.stop()
 
-    # 自動偵測可用的模型 (確保聯網搜尋功能)
     available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
     MODEL_NAME = 'models/gemini-1.5-flash' if 'models/gemini-1.5-flash' in available_models else available_models[0]
+    # 啟用 Google Search 聯網功能
     model = genai.GenerativeModel(model_name=MODEL_NAME)
     
 except Exception as e:
@@ -46,7 +46,6 @@ def save_case_report(data):
 # --- 3. 介面設計 ---
 st.title("🦅 老鷹團隊：全方位 AI 情報回報中心")
 
-# 側邊欄：管理功能
 with st.sidebar:
     st.header("⚙️ 管理選單")
     if st.button("🗑️ 清空歷史回報紀錄"):
@@ -55,10 +54,9 @@ with st.sidebar:
             st.success("紀錄已清除")
             st.rerun()
     st.divider()
-    st.info("本系統已串接 AI 搜尋，可自動分析實價登錄與同業競爭狀況。")
+    st.info("💡 提示：輸入案名後，AI 會自動列出競品網址，點擊即可查看照片。")
 
-# 頁面分欄
-col_input, col_info = st.columns([1, 1])
+col_input, col_info = st.columns([1, 1.2]) # 稍微放寬右側顯示空間
 
 with col_input:
     st.subheader("📝 案件回報表單")
@@ -69,7 +67,7 @@ with col_input:
         c_agent = st.text_input("👤 承辦人")
         c_note = st.text_area("🗒️ 案件現況備註")
         
-        submitted = st.form_submit_button("🚀 提交回報並啟動 AI 全網情報分析")
+        submitted = st.form_submit_button("🚀 提交並搜尋全網競品網址")
 
 # --- 4. 智慧情報與聯網分析邏輯 ---
 if submitted:
@@ -77,49 +75,40 @@ if submitted:
         st.error("請輸入案名與區域以利 AI 搜尋行情！")
     else:
         with col_info:
-            with st.spinner("🦅 老鷹導師正在掃描各大平台情報..."):
+            with st.spinner("🦅 老鷹導師正在搜尋實價登錄與各大仲介網照片連結..."):
                 try:
-                    # 建立聯網搜尋指令
+                    # 強化版 Prompt：要求 Markdown 連結
                     prompt = f"""
                     你是一位專業的房地產導師。請針對以下物件進行全方位市場分析：
                     案件名稱：{c_name}
                     位置：{c_loc}
                     預計開價：{c_price} 萬
                     
-                    請提供：
-                    1. **實價行情分析**：搜尋該區相似物件近一年的成交價格區間。
-                    2. **同業競爭掃描**：搜尋各大仲介網站，是否有同案異賣或類似競品？列出其開價。
-                    3. **戰鬥策略建議**：分析該開價的競爭力，並給予承辦人 {c_agent} 具體的開發或議價建議。
+                    請嚴格執行以下要求：
+                    1. **實價行情分析**：搜尋該區相似物件近一年的成交價格。
+                    2. **同業競爭掃描**：搜尋 591、永慶、信義、好房網。
+                       - **請列出至少 3 個具體競品的標題與開價**。
+                       - **【關鍵要求】**：必須附上該物件的【原始銷售網頁網址】，並以 Markdown 連結格式顯示，例如：[點我查看 591 物件照片與詳情](網址)。
+                    3. **戰鬥策略建議**：分析該開價的競爭力，並給予承辦人 {c_agent} 具體建議。
                     """
                     
                     response = model.generate_content(prompt)
                     analysis_text = response.text
                     
-                    # 顯示分析結果
                     st.success(f"✅ {c_name} 情報分析完成！")
-                    st.markdown("### 🏁 智慧情報報告")
+                    st.markdown("### 🏁 智慧情報報告 (含競品連結)")
                     st.markdown(analysis_text)
                     
-                    # 儲存回報紀錄
+                    # 儲存回報
                     report_data = {
                         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "case_name": c_name,
-                        "location": c_loc,
-                        "price": c_price,
-                        "agent": c_agent,
-                        "analysis": analysis_text
+                        "case_name": c_name, "location": c_loc, "price": c_price,
+                        "agent": c_agent, "analysis": analysis_text
                     }
                     save_case_report(report_data)
                     
-                    # 語音播報
-                    audio_text = f"導師提醒{c_agent}，關於{c_name}的情報分析已完成。"
-                    tts = gTTS(text=audio_text, lang='zh-tw')
-                    audio_fp = io.BytesIO()
-                    tts.write_to_fp(audio_fp)
-                    st.audio(audio_fp, format='audio/mp3')
-                    
                 except Exception as e:
-                    st.error(f"分析過程發生錯誤: {e}")
+                    st.error(f"分析失敗: {e}")
 
 # --- 5. 歷史情報庫 ---
 st.divider()
@@ -133,6 +122,4 @@ if os.path.exists(DATA_FILE):
                 st.write(f"**區域：** {h['location']} | **委託價：** {h['price']}萬")
                 st.markdown(h['analysis'])
     except:
-        st.info("目前尚無回報紀錄。")
-else:
-    st.info("目前尚無回報紀錄，趕快提交第一筆吧！")
+        st.info("資料夾讀取中...")
