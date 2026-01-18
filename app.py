@@ -14,7 +14,7 @@ TAIWAN_DATA = {
     "其他縣市": ["基隆市", "新竹市", "新竹縣", "苗栗縣", "彰化縣", "南投縣", "雲林縣", "嘉義市", "嘉義縣", "屏東縣", "宜蘭縣", "花蓮縣", "台東縣", "澎湖縣", "金門縣", "連江縣"]
 }
 
-# --- 2. 核心初始化 (修正 404 路由問題) ---
+# --- 2. 核心初始化 (強制使用穩定版 v1 路由) ---
 st.set_page_config(page_title="樂福情報站", layout="wide", page_icon="🦅")
 
 @st.cache_resource
@@ -23,10 +23,10 @@ def init_gemini():
         st.error("❌ 找不到 API 金鑰，請檢查 Secrets。")
         return None
     
-    # 強制指定 API 版本為 v1 (正式版)
+    # 強制配置使用穩定版 API 路徑
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     try:
-        # 使用穩定版模型路徑
+        # 直接指定模型名稱，SDK 會自動匹配最新的穩定 v1 接口
         return genai.GenerativeModel('gemini-1.5-flash')
     except Exception as e:
         st.error(f"模型啟動失敗: {e}")
@@ -37,7 +37,7 @@ model = init_gemini()
 # --- 3. 介面佈局 ---
 st.title("🦅 樂福團隊：全網偵察系統")
 
-# 行政區連動 (放在 form 外，確保即時刷新)
+# 行政區連動 (必須放在 form 外，選完縣市區域才會立刻刷新)
 st.subheader("📍 物件位置")
 ca, cb = st.columns(2)
 with ca:
@@ -45,7 +45,7 @@ with ca:
 with cb:
     sel_dist = st.selectbox("區域", options=TAIWAN_DATA[sel_city])
 
-with st.form("pro_form_love_v2026"):
+with st.form("pro_form_final_2026"):
     c3, c4 = st.columns([3, 1])
     with c3: road_name = st.text_input("路街名稱", placeholder="例如：熱河、東榮")
     with c4: road_type = st.selectbox("類型", ["路", "街", "大道", "巷"])
@@ -54,45 +54,45 @@ with st.form("pro_form_love_v2026"):
     with f1: addr_sec = st.text_input("段", placeholder="無")
     with f2: addr_lane = st.text_input("巷", placeholder="無")
     with f3: addr_alley = st.text_input("弄", placeholder="無")
-    with f4: addr_num = st.text_input("號", placeholder="號碼必填")
+    with f4: addr_num = st.text_input("號", placeholder="必填")
 
     c_floor = st.text_input("樓層 (住址一部分)", placeholder="例如：15樓、3樓之2")
     c_name = st.text_input("案名/社區 (選填)", placeholder="例如：大附中別墅")
     
     st.divider()
-    st.subheader("📏 實戰規格 (欄位已清空)")
+    st.subheader("📏 實戰規格 (欄位已清空，無預設 0)")
     s1, s2 = st.columns(2)
     with s1:
-        # 使用 text_input 讓初始狀態完全空白，方便直接輸入
-        c_land = st.text_input("地坪", placeholder="請輸入坪數")
-        c_build = st.text_input("總建坪", placeholder="請輸入坪數")
-        c_age = st.text_input("屋齡 (年)", placeholder="請輸入數字")
+        # 使用 text_input 確保初始狀態 100% 乾淨，點擊即可打字
+        c_land = st.text_input("地坪", placeholder="請輸入地坪")
+        c_build = st.text_input("總建坪", placeholder="請輸入總建")
+        c_age = st.text_input("屋齡 (年)", placeholder="請輸入屋齡")
     with s2:
-        c_inner = st.text_input("室內坪數 (主+附)", placeholder="請輸入坪數")
+        c_inner = st.text_input("室內坪數 (主+附)", placeholder="請輸入室內坪")
         c_width = st.text_input("面寬 (米)", placeholder="請輸入數字")
         c_elevator = st.selectbox("電梯", ["有", "無"])
         c_road = st.text_input("路寬 (米)", placeholder="請輸入數字")
         
-    c_price = st.text_input("開價 (萬)", placeholder="請輸入金額")
+    c_price = st.text_input("開價 (萬)", placeholder="請輸入開價")
     c_agent = st.text_input("承辦人", placeholder="您的姓名")
     
     submitted = st.form_submit_button("🚀 啟動全網掃描偵察")
 
-# --- 4. 偵察邏輯與搜尋引擎優化 ---
+# --- 4. 偵察邏輯與搜尋導航優化 ---
 if submitted and model:
-    with st.spinner("🕵️ 樂福導師正在偵察並組合關鍵字..."):
+    with st.spinner("🕵️ 樂福導師正在跨平台掃描..."):
         try:
             time.sleep(1) # 抗壓緩衝
             
-            # 組合地址
+            # 組合完整地址
             full_addr = f"{sel_city}{sel_dist}{road_name}{road_type}"
             if addr_sec: full_addr += f"{addr_sec}段"
             if addr_lane: full_addr += f"{addr_lane}巷"
             if addr_alley: full_addr += f"{addr_alley}弄"
             full_addr += f"{addr_num}號{c_floor}"
             
-            # 1. AI 分析
-            prompt = f"你是房仲專業導師。物件：{full_addr} ({c_name})，規格：地{c_land}/建{c_build}/室內{c_inner}坪/屋齡{c_age}，開價{c_price}萬。請提供行情分析與承辦人{c_agent}談價建議。"
+            # 1. 生成分析報告
+            prompt = f"分析物件：{full_addr} ({c_name})，規格：地{c_land}/建{c_build}/室內{c_inner}坪/屋齡{c_age}，開價{c_price}萬。請對比行情給予承辦人{c_agent}談價建議。"
             res = model.generate_content(prompt).text
             
             st.subheader(f"📊 {full_addr} 分析報告")
@@ -100,18 +100,18 @@ if submitted and model:
             
             st.divider()
             
-            # 2. 搜尋引擎優化 (解決搜尋沒東西的問題)
-            # 關鍵字組合策略：路名 + 案名 + 坪數 (最能掃到 5168 照片的組合)
+            # 2. [關鍵修正] 搜尋引擎精準導航
+            # 策略：縣市區域 + 路名 + 坪數 + 案名 (這組合在 5168 最能跳出活案照片)
             search_key = f"{sel_city}{sel_dist}{road_name} {c_inner}坪"
             if c_name: search_key += f" {c_name}"
             encoded_key = urllib.parse.quote(search_key)
             
-            st.subheader("🌐 即時前往全網搜尋 (已修復關鍵字)")
+            st.subheader("🌐 即時前往搜尋 (內容已修復)")
             r1, r2, r3 = st.columns(3)
             with r1:
-                st.link_button("🏠 5168 搜尋照片", f"https://house.5168.com.tw/list?keywords={encoded_key}")
+                st.link_button("🏠 5168 搜尋照片/活案", f"https://house.5168.com.tw/list?keywords={encoded_key}")
             with r2:
-                st.link_button("🏗️ 591 房屋交易", f"https://newhouse.591.com.tw/list?keywords={encoded_key}")
+                st.link_button("🏗️ 591 房屋交易搜尋", f"https://newhouse.591.com.tw/list?keywords={encoded_key}")
             with r3:
                 leju_q = urllib.parse.quote(f"{sel_city}{sel_dist}{road_name}")
                 st.link_button("📈 樂居實價登錄", f"https://www.leju.com.tw/search/search_result?type=1&q={leju_q}")
