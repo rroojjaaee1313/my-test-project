@@ -18,7 +18,7 @@ except Exception as e:
 st.set_page_config(page_title="老鷹 AI 長期助理", layout="wide")
 
 # 使用穩定版的模型名稱格式
-MODEL_NAME = 'models/gemini-1.5-flash'
+MODEL_NAME = 'gemini-1.5-flash'
 # 初始化模型
 try:
     model = genai.GenerativeModel(model_name=MODEL_NAME)
