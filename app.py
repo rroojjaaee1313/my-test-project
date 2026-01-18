@@ -1,69 +1,124 @@
 import streamlit as st
 import google.generativeai as genai
+from PyPDF2 import PdfReader
+from gtts import gTTS
 import os
+import io
 import json
 from datetime import datetime
 
-# --- 1. 系統初始化 (設定網頁標題與 API) ---
-st.set_page_config(page_title="老鷹全網活案情報站", layout="wide", page_icon="🦅")
+# --- 1. 系統初始化 ---
+st.set_page_config(page_title="老鷹全能情報中心", layout="wide", page_icon="🦅")
 
 try:
     if "GEMINI_API_KEY" in st.secrets:
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-        # 使用具備聯網搜尋能力的模型
         model = genai.GenerativeModel(model_name='gemini-1.5-flash')
     else:
-        st.error("❌ 找不到 API 金鑰，請檢查 Streamlit Secrets 設定中的 GEMINI_API_KEY。")
+        st.error("❌ 找不到 API 金鑰，請檢查 Streamlit Secrets。")
         st.stop()
 except Exception as e:
-    st.error(f"❌ 系統初始化失敗，請稍後再試: {e}")
+    st.error(f"❌ 初始化失敗: {e}")
     st.stop()
 
-# --- 2. 介面設計 ---
-st.title("🦅 老鷹團隊：即時在售物件情報系統")
-st.markdown("### 🔍 專注偵測各大仲介官網「目前在售」活案，排除實價登錄紀錄")
+# --- 2. 數據儲存邏輯 ---
+DATA_FILE = "case_reports.json"
+def save_report(data):
+    current_data = []
+    if os.path.exists(DATA_FILE):
+        try:
+            with open(DATA_FILE, "r", encoding="utf-8") as f:
+                current_data = json.load(f)
+        except: pass
+    current_data.append(data)
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(current_data, f, ensure_ascii=False, indent=2)
 
-# 分欄布局
-col_in, col_res = st.columns([1, 1.3])
+# --- 3. 介面佈局 ---
+st.title("🦅 老鷹團隊：全能 AI 智慧情報中心")
+
+with st.sidebar:
+    st.header("⚙️ 助理管理")
+    uploaded_pdf = st.file_uploader("上傳培訓教材 (PDF)", type="pdf")
+    if st.button("🗑️ 清空所有歷史紀錄"):
+        if os.path.exists(DATA_FILE): os.remove(DATA_FILE)
+        st.rerun()
+    st.divider()
+    st.info("支援平台：5168、住商、中信、太平洋、台灣房屋、591、永慶、信義")
+
+col_in, col_res = st.columns([1, 1.2])
+
+# PDF 內容處理
+context_text = ""
+if uploaded_pdf:
+    reader = PdfReader(uploaded_pdf)
+    for page in reader.pages:
+        context_text += page.extract_text() + "\n"
+    st.sidebar.success("✅ 教材已載入")
 
 with col_in:
-    st.subheader("📝 案件情報輸入")
-    with st.form("live_case_scan_form"):
-        c_name = st.text_input("🏠 案件/社區名稱", placeholder="例如：大附中別墅 或 熱河路透天")
-        c_loc = st.text_input("📍 區域/路段", placeholder="例如：大里區 或 北屯區")
-        c_price = st.number_input("💰 我的委託價格 (萬)", value=2000, step=10)
-        c_agent = st.text_input("👤 承辦同仁姓名")
-        
-        submitted = st.form_submit_button("🔥 立即偵測全網同業活案")
+    st.subheader("📝 案件情報回報")
+    with st.form("ultimate_form"):
+        c_name = st.text_input("🏠 案件/社區名稱")
+        c_loc = st.text_input("📍 區域/路段")
+        c_price = st.number_input("💰 委託價格 (萬)", value=2000)
+        c_agent = st.text_input("👤 承辦人")
+        c_note = st.text_area("🗒️ 現況備註")
+        submitted = st.form_submit_button("🔥 啟動全網活案掃描與戰術指導")
 
-# --- 3. 活案偵測與 AI 分析邏輯 ---
+# --- 4. 核心分析邏輯 ---
 if submitted:
     if not c_name or not c_loc:
-        st.error("請填寫案名與區域，以利導師精準搜尋。")
+        st.error("請填寫基本案件資訊")
     else:
         with col_res:
-            with st.spinner(f"🦅 老鷹導師正在掃描 5168、住商、中信、太平洋、台灣房屋 在售網頁..."):
-                # 強制 AI 搜尋特定平台的活案連結，嚴禁提供實價登錄舊資料
-                prompt = f"""
-                你是一位專業的房地產情報員。現在要針對以下物件搜尋【目前在市場上銷售中】的活案：
-                案名：{c_name} | 區域：{c_loc} | 預計開價：{c_price} 萬
-                
-                【任務硬性要求】：
-                1. 僅列出目前在【5168、住商不動產、中信房屋、太平洋房屋、台灣房屋、591、永慶、信義】官網上「仍在銷售中」的物件。
-                2. 嚴格【排除】任何「實價登錄」或「已成交」的歷史網頁。我不需要過去的紀錄，我要看現在的對手。
-                3. 請提供【有效的原始網頁超連結】，格式必須為：[平台名稱 - 物件標題 - 目前開價](網址)。
-                4. 最後請分析：這些競爭對手的照片狀況與開價，相對於承辦人 {c_agent} 的 {c_price} 萬，競爭力如何？
-                """
-                
+            with st.spinner("🦅 正在掃描各家仲介官網活案中..."):
                 try:
+                    # 合體版指令：結合教材與活案偵測
+                    prompt = f"""
+                    你是一位專業的老鷹團隊導師。
+                    【培訓教材背景】：{context_text[:2000]}
+                    【目標物件】：{c_name} | {c_loc} | 開價 {c_price} 萬
+                    
+                    請執行任務：
+                    1. **活案掃描**：搜尋 5168、住商、中信、太平洋、台灣房屋、591、永慶、信義。
+                       - 列出目前【銷售中】的物件名稱與價格。
+                       - 必須提供【有效超連結】，格式：[平台 - 標題 - 價格](網址)
+                    2. **實價分析**：僅提供最新(半年內)成交區間供參考。
+                    3. **導師建議**：根據教材風格，給予承辦人 {c_agent} 開發或議價的戰術指導。
+                    """
+                    
                     response = model.generate_content(prompt)
+                    analysis_text = response.text
                     
-                    st.success("✅ 活案掃描完成！")
-                    st.markdown("### 🏁 當前市場在售競品清單 (含直接連結)")
-                    st.markdown(response.text)
+                    st.success("✅ 深度分析完成")
+                    st.markdown(analysis_text)
                     
-                    st.divider()
-                    st.subheader("🌐 即時搜尋輔助工具")
-                    st.write("若 AI 提供的連結已售罄，請點擊下方按鈕進行【強制全網即時監測】：")
+                    # 語音功能
+                    audio_text = f"導師提醒{c_agent}，關於{c_name}的活案分析已完成，請查收。"
+                    tts = gTTS(text=audio_text, lang='zh-tw')
+                    audio_fp = io.BytesIO()
+                    tts.write_to_fp(audio_fp)
+                    st.audio(audio_fp, format='audio/mp3')
                     
-                    # 組合各大仲介官網
+                    # 搜尋補助工具
+                    search_query = f"{c_loc} {c_name} 在售 (site:5168.com.tw OR site:hbhousing.com.tw OR site:cthouse.com.tw OR site:pacific.com.tw OR site:twhg.com.tw)"
+                    st.link_button("🌐 前往 Google 同步監測各大官網照片", f"https://www.google.com/search?q={search_query}")
+                    
+                    # 存檔
+                    save_report({"time": str(datetime.now()), "case": c_name, "agent": c_agent, "analysis": analysis_text})
+                    
+                except Exception as e:
+                    st.error(f"分析失敗: {e}")
+
+# --- 5. 團隊歷史情報庫 ---
+st.divider()
+st.subheader("📚 團隊歷史案件情報庫")
+if os.path.exists(DATA_FILE):
+    try:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            history = json.load(f)
+        for h in reversed(history[-10:]):
+            with st.expander(f"📌 {h['case']} - {h['agent']}"):
+                st.markdown(h['analysis'])
+    except: pass
