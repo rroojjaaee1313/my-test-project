@@ -7,34 +7,20 @@ import io
 import json
 from datetime import datetime
 
-# --- 1. 系統初始化 (修正 404 模型路徑與自動偵測) ---
-st.set_page_config(page_title="老鷹全能情報中心", layout="wide", page_icon="🦅")
+# --- 1. 系統初始化 (修正 404 模型路徑與品牌更新) ---
+st.set_page_config(page_title="樂福全能情報中心", layout="wide", page_icon="🦅")
 
-if "GEMINI_API_KEY" not in st.secrets:
-    st.error("❌ 找不到 API 金鑰，請檢查 Streamlit Secrets 設定。")
+try:
+    if "GEMINI_API_KEY" in st.secrets:
+        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+        # 使用穩定版完整路徑，確保不再出現 404
+        model = genai.GenerativeModel(model_name='models/gemini-1.5-flash')
+    else:
+        st.error("❌ 找不到 API 金鑰，請檢查 Streamlit Secrets 設定。")
+        st.stop()
+except Exception as e:
+    st.error(f"❌ 初始化失敗: {e}")
     st.stop()
-
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-
-# 自動偵測可用模型邏輯，避免 404 錯誤
-@st.cache_resource
-def get_best_model():
-    try:
-        # 優先嘗試完整路徑名稱
-        target_model = 'models/gemini-1.5-flash'
-        # 測試模型是否可用
-        m = genai.get_model(target_model)
-        return genai.GenerativeModel(model_name=target_model)
-    except:
-        try:
-            # 若失敗，列出所有支援 generateContent 的模型並選取第一個
-            models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-            return genai.GenerativeModel(model_name=models[0])
-        except Exception as e:
-            st.error(f"❌ 無法連接至任何 Gemini 模型: {e}")
-            return None
-
-model = get_best_model()
 
 # --- 2. 數據儲存邏輯 ---
 DATA_FILE = "case_reports.json"
@@ -50,12 +36,12 @@ def save_report(data):
         json.dump(current_data, f, ensure_ascii=False, indent=2)
 
 # --- 3. 介面佈局 ---
-st.title("🦅 老鷹團隊：全能 AI 智慧情報中心")
+st.title("🦅 樂福團隊：全能 AI 智慧情報中心")
 
 with st.sidebar:
     st.header("⚙️ 助理管理")
     uploaded_pdf = st.file_uploader("上傳培訓教材 (PDF)", type="pdf")
-    if st.button("🗑️ 清空歷史紀錄"):
+    if st.button("🗑️ 清空所有歷史紀錄"):
         if os.path.exists(DATA_FILE): os.remove(DATA_FILE)
         st.success("紀錄已清除")
         st.rerun()
@@ -71,7 +57,8 @@ if uploaded_pdf:
         reader = PdfReader(uploaded_pdf)
         for page in reader.pages:
             content = page.extract_text()
-            if content: context_text += content + "\n"
+            if content:
+                context_text += content + "\n"
         st.sidebar.success("✅ 教材已載入")
     except Exception as e:
         st.sidebar.error(f"PDF 讀取失敗: {e}")
@@ -88,49 +75,62 @@ with col_in:
 
 # --- 4. 核心分析邏輯 ---
 if submitted:
-    if not model:
-        st.error("模型尚未就緒，請檢查 API 設定。")
-    elif not c_name or not c_loc:
+    if not c_name or not c_loc:
         st.error("請填寫基本案件資訊")
     else:
         with col_res:
-            with st.spinner("🦅 老鷹導師正在掃描各大房仲官網活案中..."):
+            with st.spinner("🦅 樂福導師正在掃描各大房仲官網活案中..."):
                 try:
+                    # 指令：結合樂福導師風格與活案偵測
                     prompt = f"""
-                    你是一位專業的老鷹團隊房產導師。
-                    背景教材：{context_text[:1500] if context_text else "專業房地產銷售經驗"}
+                    你是一位專業的「樂福團隊」房地產導師。
+                    【培訓教材背景】：{context_text[:1500] if context_text else "專業房仲經驗"}
+                    【目標物件】：{c_name} | {c_loc} | 開價 {c_price} 萬
                     
-                    任務：針對【{c_loc} {c_name}】，開價 {c_price} 萬進行分析：
-                    1. **活案掃描**：搜尋 5168、住商、中信、太平洋、台灣房屋、591。
+                    請執行任務：
+                    1. **活案掃描**：搜尋 5168、住商、中信、太平洋、台灣房屋、591、永慶、信義。
                        - 列出目前【銷售中】物件的 [平台 - 標題 - 價格](網址)。
-                       - 嚴禁顯示已成交的實價登錄。
-                    2. **競爭力建議**：針對承辦人 {c_agent}，分析此開價與對手的強弱，給予具體戰術。
+                       - 嚴禁顯示已成交的實價登錄紀錄。
+                    2. **實價分析**：僅提供半年內最新成交區間參考。
+                    3. **戰術指導**：針對承辦人 {c_agent}，分析開價競爭力並給予具體戰法建議。
                     """
-                    response = model.generate_content(prompt)
-                    st.success("✅ 分析完成")
-                    st.markdown(response.text)
                     
-                    # 語音
-                    audio_text = f"導師提醒{c_agent}，關於{c_name}的分析已完成。"
+                    response = model.generate_content(prompt)
+                    analysis_text = response.text
+                    
+                    st.success("✅ 樂福導師分析完成")
+                    st.markdown(analysis_text)
+                    
+                    # 語音功能
+                    audio_text = f"樂福導師提醒{c_agent}，關於{c_name}的活案分析已完成，請確認競爭對手狀況。"
                     tts = gTTS(text=audio_text, lang='zh-tw')
                     audio_fp = io.BytesIO()
                     tts.write_to_fp(audio_fp)
                     st.audio(audio_fp, format='audio/mp3')
                     
-                    # 搜尋補助連結
-                    search_query = f"{c_loc} {c_name} 在售 (site:5168.com.tw OR site:hbhousing.com.tw OR site:cthouse.com.tw OR site:pacific.com.tw OR site:twhg.com.tw)"
-                    st.link_button("🌐 開啟 Google 即時監測", f"https://www.google.com/search?q={search_query}")
+                    # 外部工具連結
+                    search_query = f"{c_loc} {c_name} 在售 (site:5168.com.tw OR site:hbhousing.com.tw OR site:cthouse.com.tw OR site:pacific.com.tw OR site:twhg.com.tw OR site:591.com.tw)"
+                    st.link_button("🌐 直接開啟 Google 監測最新照片", f"https://www.google.com/search?q={search_query}")
                     
-                    save_report({"time": datetime.now().strftime("%Y-%m-%d %H:%M"), "case": c_name, "agent": c_agent, "analysis": response.text})
+                    # 存檔
+                    save_report({
+                        "time": datetime.now().strftime("%Y-%m-%d %H:%M"), 
+                        "case": c_name, 
+                        "agent": c_agent, 
+                        "analysis": analysis_text
+                    })
+                    
                 except Exception as e:
                     st.error(f"分析失敗: {e}")
 
-# --- 5. 歷史庫 ---
+# --- 5. 樂福歷史情報庫 ---
 st.divider()
-st.subheader("📚 團隊歷史案件情報庫")
+st.subheader("📚 樂福歷史案件情報庫")
 if os.path.exists(DATA_FILE):
-    with open(DATA_FILE, "r", encoding="utf-8") as f:
-        history = json.load(f)
-    for h in reversed(history[-10:]):
-        with st.expander(f"📌 {h.get('case')} - {h.get('agent')} ({h.get('time')})"):
-            st.markdown(h.get('analysis'))
+    try:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            history = json.load(f)
+        for h in reversed(history[-10:]):
+            with st.expander(f"📌 {h.get('case', '未知')} - {h.get('agent', '未知')} ({h.get('time', '')})"):
+                st.markdown(h.get('analysis', '無內容'))
+    except: pass
