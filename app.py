@@ -3,7 +3,7 @@ import google.generativeai as genai
 from gtts import gTTS
 import os, io, time
 
-# --- 1. 全台行政區資料庫 (100% 完整收錄) ---
+# --- 1. 全台行政區資料庫 (2026 完整版) ---
 TAIWAN_DISTRICTS = {
     "台中市": ["大里區", "北屯區", "西屯區", "南屯區", "太平區", "霧峰區", "烏日區", "豐原區", "中區", "東區", "南區", "西區", "北區", "潭子區", "大雅區", "神岡區", "沙鹿區", "龍井區", "梧棲區", "清水區", "大甲區", "外埔區", "大安區", "后里區", "石岡區", "東勢區", "和平區", "新社區", "大肚區"],
     "台北市": ["中正區", "萬華區", "大同區", "中山區", "松山區", "大安區", "信義區", "內湖區", "南港區", "士林區", "北投區", "文山區"],
@@ -29,14 +29,33 @@ TAIWAN_DISTRICTS = {
     "連江縣": ["南竿鄉", "北竿鄉", "莒光鄉", "東引鄉"]
 }
 
-# --- 2. 系統初始化 ---
+# --- 2. 系統初始化 (修正 404 模型路徑) ---
 st.set_page_config(page_title="樂福情報站", layout="wide", page_icon="🦅")
 
 @st.cache_resource
 def init_gemini():
-    if "GEMINI_API_KEY" not in st.secrets: return None
+    if "GEMINI_API_KEY" not in st.secrets:
+        st.error("❌ 找不到 API 金鑰")
+        return None
+    
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    return genai.GenerativeModel('gemini-1.5-flash')
+    
+    # 強制嘗試穩定版路徑，避開 v1beta 的 404
+    try:
+        # 測試模型是否存在
+        model = genai.GenerativeModel(model_name='models/gemini-1.5-flash')
+        # 進行極輕量測試
+        model.generate_content("ping", generation_config={"max_output_tokens": 1})
+        return model
+    except:
+        try:
+            # 備用：列出可用清單
+            available = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+            target = next((m for m in available if 'flash' in m), available[0])
+            return genai.GenerativeModel(model_name=target)
+        except Exception as e:
+            st.error(f"模型初始化失敗: {e}")
+            return None
 
 model = init_gemini()
 
@@ -46,11 +65,11 @@ st.title("🦅 樂福團隊：全台精準偵察系統")
 col_in, col_res = st.columns([1, 1.2])
 
 with col_in:
-    with st.form("pro_form_taiwan_all"):
+    with st.form("pro_form_final_v5"):
         st.subheader("📍 物件位置")
         c1_addr, c2_addr = st.columns(2)
         with c1_addr:
-            city = st.selectbox("縣市", options=list(TAIWAN_DISTRICTS.keys()), index=0) # 預設台中市
+            city = st.selectbox("縣市", options=list(TAIWAN_DISTRICTS.keys()), index=0)
         with c2_addr:
             district = st.selectbox("區域", options=TAIWAN_DISTRICTS[city])
         
@@ -65,7 +84,7 @@ with col_in:
             c_build_total = st.number_input("總建坪", value=65.0, step=0.1)
             c_age = st.number_input("屋齡 (年)", value=15)
         with c2:
-            # 正名：室內坪數 (主+附)
+            # 名稱修正：室內坪數 (主+附)
             c_build_inner = st.number_input("室內坪數 (主+附)", value=55.0, step=0.1)
             c_width = st.number_input("面寬 (米)", value=5.0, step=0.1)
             c_elevator = st.selectbox("電梯", ["有", "無"])
@@ -74,13 +93,13 @@ with col_in:
         c_agent = st.text_input("承辦人")
         submitted = st.form_submit_button("🚀 啟動精準分析")
 
-# --- 4. 分析邏輯 ---
+# --- 4. 分析邏輯 (加入延遲與 429 保護) ---
 if submitted and model:
     with col_res:
-        with st.spinner("🕵️ 樂福導師正在跨縣市計算中..."):
+        with st.spinner("🕵️ 樂福導師正在計算..."):
             try:
-                # 緩衝機制避免 429
-                time.sleep(1) 
+                # 緩衝延遲防止 429
+                time.sleep(1.2) 
                 
                 inner_pct = round((c_build_inner / c_build_total) * 100, 1)
                 full_loc = f"{city}{district}{road_name}"
@@ -91,25 +110,25 @@ if submitted and model:
                 物件：{full_loc} {c_name} (屋齡{c_age}/地{c_land}/總建{c_build_total}/室內坪數{c_build_inner}/{c_elevator}/面寬{c_width}m)
                 價格：{c_price}萬 (單價{unit_p}萬)
                 
-                內容：
-                1.【行情】對比同區相似活案。
-                2.【評估】室內(主+附)占比{inner_pct}%之優劣。
-                3.【戰術】指導{c_agent}談價關鍵。
-                * 嚴禁生成任何 fake 網址。
+                任務：
+                1.【行情】比對該區相似活案價格。
+                2.【評估】分析室內(主+附)占比{inner_pct}%之空間優勢。
+                3.【戰術】指導承辦人{c_agent}如何談價與開發。
+                * 禁止生成假網址。
                 """
                 
                 res = model.generate_content(prompt).text
-                st.subheader(f"📊 {c_name} 報告")
+                st.subheader(f"📊 {c_name} 分析報告")
                 st.markdown(res)
                 
                 # 語音
-                tts = gTTS(f"分析完成，{c_agent}請查收報告。", lang='zh-tw')
+                tts = gTTS(f"報告已完成，{c_agent}請查收。", lang='zh-tw')
                 fp = io.BytesIO(); tts.write_to_fp(fp)
                 st.audio(fp, format='audio/mp3')
                 
+                # 搜尋跳轉連結 (解決失效連結問題)
                 st.divider()
                 st.subheader("🌐 即時官網搜尋 (100% 真實照片)")
-                # 根據不同平台帶入精準關鍵字
                 search_q = f"{city}{district}+{road_name}+{c_build_inner}坪"
                 st.link_button("🏠 開啟 5168 官網搜尋照片", f"https://house.5168.com.tw/list?keywords={search_q}")
                 
