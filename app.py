@@ -3,7 +3,7 @@ import google.generativeai as genai
 from gtts import gTTS
 import os, io, time
 
-# --- 1. 全台行政區資料庫 (確保選單即時連動) ---
+# --- 1. 全台行政區資料庫 (連動修復版) ---
 TAIWAN_DATA = {
     "台中市": ["大里區", "北屯區", "西屯區", "南屯區", "太平區", "霧峰區", "烏日區", "豐原區", "中區", "東區", "南區", "西區", "北區", "潭子區", "大雅區", "神岡區", "沙鹿區", "龍井區", "梧棲區", "清水區", "大甲區", "外埔區", "大安區", "后里區", "石岡區", "東勢區", "和平區", "新社區", "大肚區"],
     "台北市": ["中正區", "萬華區", "大同區", "中山區", "松山區", "大安區", "信義區", "內湖區", "南港區", "士林區", "北投區", "文山區"],
@@ -24,10 +24,10 @@ def init_gemini():
         st.error("❌ 找不到 API 金鑰，請檢查 Secrets。")
         return None
     
-    # 強制使用穩定版路徑，解決 v1beta 404 問題
+    # 強制指定穩定版配置
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     try:
-        # 強制指定 models/ 前綴以確保正確連線
+        # 使用 models/ 前綴強制指向穩定版本
         return genai.GenerativeModel(model_name='models/gemini-1.5-flash')
     except Exception as e:
         st.error(f"模型啟動失敗: {e}")
@@ -38,7 +38,7 @@ model = init_gemini()
 # --- 3. 介面佈局 ---
 st.title("🦅 樂福團隊：全網偵察系統")
 
-# 行政區連動 (放在 form 外，選擇後網頁會立即刷新區域選單)
+# 行政區連動 (必須放在 form 外，選擇後網頁會立即刷新區域選單)
 st.subheader("📍 物件位置")
 c1_addr, c2_addr = st.columns(2)
 with c1_addr:
@@ -60,15 +60,15 @@ with st.form("pro_form_final_v2026"):
     with f3: addr_alley = st.text_input("弄", placeholder="弄")
     with f4: addr_num = st.text_input("號", placeholder="號碼")
 
-    # 樓層與案名
+    # 樓層納入地址組合
     c_floor = st.text_input("樓層 (住址部分)", placeholder="例如：15樓、3樓之1")
     c_name = st.text_input("案名/社區 (選填)", placeholder="例如：大附中別墅")
     
     st.divider()
-    st.subheader("📏 實戰規格 (欄位完全清空)")
+    st.subheader("📏 實戰規格 (欄位已清空，無預設 0)")
     c1, c2 = st.columns(2)
     with c1:
-        # 使用 text_input 讓初始狀態為空白，方便直接輸入不用刪除 0
+        # 使用 text_input 讓初始狀態為純白空白，方便直接輸入
         c_land = st.text_input("地坪", placeholder="輸入數字")
         c_build_total = st.text_input("總建坪", placeholder="輸入數字")
         c_age = st.text_input("屋齡 (年)", placeholder="輸入數字")
@@ -87,10 +87,8 @@ with st.form("pro_form_final_v2026"):
 if submitted and model:
     with st.spinner("🕵️ 樂福導師正在跨平台偵察中..."):
         try:
-            # 延遲保護 429
-            time.sleep(1.2)
-            
-            # 自動組合地址 (包含樓層)
+            time.sleep(1.2) # 抗壓保護
+            # 組合「含樓層」的完整地址
             full_addr = f"{selected_city}{selected_district}{road_name}{road_type}"
             if addr_sec: full_addr += f"{addr_sec}段"
             if addr_lane: full_addr += f"{addr_lane}巷"
@@ -98,15 +96,11 @@ if submitted and model:
             full_addr += f"{addr_num}號{c_floor}"
             
             prompt = f"""
-            你是樂福團隊的房產導師，請分析此物件：
+            你是樂福團隊的專業房產導師。請分析此物件之市場競爭力：
             地址：{full_addr} ({c_name})
             規格：屋齡{c_age}/地{c_land}/總建{c_build_total}/室內坪數(主+附){c_build_inner}/{c_elevator}/面寬{c_width}m
-            價格：{c_price}萬
-            
-            任務：
-            1. 行情比對：分析 5168, 591, 永慶, 信義等相似活案。
-            2. 優劣評估：分析該樓層價值與室內占比競爭力。
-            3. 戰術指導：給予承辦人 {c_agent} 具體的談價或開發建議。
+            開價：{c_price}萬
+            任務：執行全網行情比對、分析該樓層價值、指導承辦人 {c_agent} 如何談價。
             * 禁止生成假網址。
             """
             
@@ -121,7 +115,7 @@ if submitted and model:
             with r1:
                 st.link_button("🏠 5168 全網搜尋", f"https://house.5168.com.tw/list?keywords={search_q}")
             with r2:
-                st.link_button("🏗️ 591 房屋交易網", f"https://newhouse.591.com.tw/list?keywords={search_q}")
+                st.link_button("🏗️ 591 房屋交易", f"https://newhouse.591.com.tw/list?keywords={search_q}")
             with r3:
                 st.link_button("📈 樂居實價登錄", f"https://www.leju.com.tw/search/search_result?type=1&q={full_addr}")
                 
