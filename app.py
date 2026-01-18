@@ -4,13 +4,16 @@ import os
 import json
 from datetime import datetime
 
-# --- 1. 初始化 ---
+# --- 1. 系統初始化 ---
 st.set_page_config(page_title="老鷹全網活案情報站", layout="wide", page_icon="🦅")
 
 try:
     if "GEMINI_API_KEY" in st.secrets:
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    model = genai.GenerativeModel(model_name='gemini-1.5-flash')
+        model = genai.GenerativeModel(model_name='gemini-1.5-flash')
+    else:
+        st.error("❌ 找不到 API 金鑰，請檢查 Streamlit Secrets 設定。")
+        st.stop()
 except Exception as e:
     st.error(f"❌ 初始化失敗: {e}")
     st.stop()
@@ -36,17 +39,16 @@ if submitted:
     else:
         with col_res:
             with st.spinner(f"正在掃描 5168、住商、中信、太平洋、台灣房屋 在售網頁..."):
-                # 強制 AI 排除實價登錄，專注於「銷售中」網址
+                # 強制 AI 搜尋特定平台的活案連結
                 prompt = f"""
                 你是一位房地產情報偵察員。現在要針對以下物件搜尋【目前在市場上銷售中】的活案：
                 案名：{c_name} | 區域：{c_loc} | 預計開價：{c_price} 萬
                 
                 【硬性要求】：
-                1. 排除任何「實價登錄」或「已成交」的歷史網頁。
-                2. 僅列出目前在【5168、住商不動產、中信房屋、太平洋房屋、台灣房屋、591、永慶、信義】官網上「仍在銷售中」的物件。
-                3. 請提供【有效網址超連結】，讓承辦人 {c_agent} 點擊後能直接看到目前的照片與銷售現況。
-                4. 格式請統一為：[平台名稱 - 物件名稱 - 開價](網址)
-                5. 最後請分析：這些對手的開價相對於我的 {c_price} 萬，競爭力如何？
+                1. 僅列出目前在【5168、住商不動產、中信房屋、太平洋房屋、台灣房屋、591、永慶、信義】官網上「仍在銷售中」的物件。
+                2. 排除任何「實價登錄」或「已成交」的歷史網頁。
+                3. 請提供【有效網址超連結】，格式為：[平台名稱 - 物件名稱 - 開價](網址)。
+                4. 最後分析：這些對手的開價相對於我的 {c_price} 萬，競爭力如何？
                 """
                 
                 try:
@@ -55,4 +57,19 @@ if submitted:
                     st.markdown("### 🏁 當前市場在售競品清單")
                     st.markdown(response.text)
                     
-                    # 補
+                    st.divider()
+                    st.subheader("🌐 同步搜尋助手")
+                    
+                    # 組合各大仲介官網的搜尋關鍵字
+                    search_query = f"{c_loc} {c_name} 在售 (site:5168.com.tw OR site:hbhousing.com.tw OR site:cthouse.com.tw OR site:pacific.com.tw OR site:twhg.com.tw)"
+                    google_link = f"https://www.google.com/search?q={search_query}"
+                    
+                    st.link_button("👉 點我直接開啟 Google 同步監測各大仲介官網照片", google_link)
+                    
+                except Exception as e:
+                    st.error(f"搜尋過程發生錯誤: {e}")
+                finally:
+                    pass # 確保區塊完整結尾
+
+# --- 4. 數據儲存紀錄 (選配) ---
+# 若需要紀錄功能可再補回
