@@ -14,7 +14,6 @@ st.set_page_config(page_title="老鷹 AI 長期助理", layout="wide")
 
 # 初始化模型
 model = genai.GenerativeModel('models/gemini-1.5-flash')
-
 # --- 記憶功能：讀取與儲存 JSON 檔案 ---
 HISTORY_FILE = "chat_history.json"
 
