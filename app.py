@@ -1,9 +1,9 @@
 import streamlit as st
 import google.generativeai as genai
-from gtts import gTTS
-import os, io, time
+import time
+import urllib.parse
 
-# --- 1. 全台行政區資料庫 (確保選單即時連動) ---
+# --- 1. 全台行政區資料庫 (連動穩定版) ---
 TAIWAN_DATA = {
     "台中市": ["大里區", "北屯區", "西屯區", "南屯區", "太平區", "霧峰區", "烏日區", "豐原區", "中區", "東區", "南區", "西區", "北區", "潭子區", "大雅區", "神岡區", "沙鹿區", "龍井區", "梧棲區", "清水區", "大甲區", "外埔區", "大安區", "后里區", "石岡區", "東勢區", "和平區", "新社區", "大肚區"],
     "台北市": ["中正區", "萬華區", "大同區", "中山區", "松山區", "大安區", "信義區", "內湖區", "南港區", "士林區", "北投區", "文山區"],
@@ -11,10 +11,10 @@ TAIWAN_DATA = {
     "桃園市": ["桃園區", "中壢區", "大溪區", "楊梅區", "蘆竹區", "大園區", "龜山區", "八德區", "龍潭區", "平鎮區", "新屋區", "觀音區"],
     "高雄市": ["新興區", "苓雅區", "鼓山區", "左營區", "楠梓區", "三民區", "鳳山區", "小港區"],
     "台南市": ["中西區", "東區", "南區", "北區", "安平區", "安南區", "永康區", "歸仁區", "新化區", "善化區", "新市區"],
-    "其他縣市": ["新竹市", "新竹縣", "苗栗縣", "彰化縣", "南投縣", "雲林縣", "嘉義市", "嘉義縣", "屏東縣", "宜蘭縣", "花蓮縣", "台東縣", "澎湖縣", "金門縣", "連江縣"]
+    "其他縣市": ["基隆市", "新竹市", "新竹縣", "苗栗縣", "彰化縣", "南投縣", "雲林縣", "嘉義市", "嘉義縣", "屏東縣", "宜蘭縣", "花蓮縣", "台東縣", "澎湖縣", "金門縣", "連江縣"]
 }
 
-# --- 2. 核心修復：強制穩定版路由 & 自動偵測 ---
+# --- 2. 系統初始化 (解決配額與路徑問題) ---
 st.set_page_config(page_title="樂福情報站", layout="wide", page_icon="🦅")
 
 @st.cache_resource
@@ -22,33 +22,16 @@ def init_gemini():
     if "GEMINI_API_KEY" not in st.secrets:
         st.error("❌ 找不到 API 金鑰，請檢查 Secrets。")
         return None
-    
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    
-    # [核心修復邏輯] 嘗試多種路徑避開 404
-    try:
-        # 1. 嘗試直接調用最新穩定版
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        # 進行測試呼叫以確認是否真的連通
-        model.generate_content("test", generation_config={"max_output_tokens": 1})
-        return model
-    except:
-        try:
-            # 2. 如果失敗，嘗試自動抓取帳號內可用的模型名稱
-            available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-            # 優先找帶有 flash 字樣的模型
-            target_model = next((m for m in available_models if 'flash' in m), available_models[0])
-            return genai.GenerativeModel(target_model)
-        except Exception as e:
-            st.error(f"模型連線終極失敗，請檢查 API 金鑰權限。原因: {e}")
-            return None
+    # 使用 1.5-flash 以確保最高每日配額 (1500次)
+    return genai.GenerativeModel('gemini-1.5-flash')
 
 model = init_gemini()
 
 # --- 3. 介面佈局 ---
 st.title("🦅 樂福團隊：全網偵察系統")
 
-# 行政區連動 (必須放在 form 外，選完縣市區域才會立刻刷新)
+# 行政區連動 (放在 form 外，確保即時重新載入區域)
 st.subheader("📍 物件位置")
 ca, cb = st.columns(2)
 with ca:
@@ -56,7 +39,7 @@ with ca:
 with cb:
     sel_dist = st.selectbox("區域", options=TAIWAN_DATA[sel_city])
 
-with st.form("pro_form_final_v2026"):
+with st.form("pro_search_v2"):
     c3, c4 = st.columns([3, 1])
     with c3: road_name = st.text_input("路街名稱", placeholder="熱河、東榮")
     with c4: road_type = st.selectbox("類型", ["路", "街", "大道", "巷"])
@@ -67,53 +50,68 @@ with st.form("pro_form_final_v2026"):
     with f3: addr_alley = st.text_input("弄", placeholder="弄")
     with f4: addr_num = st.text_input("號", placeholder="號碼")
 
-    c_floor = st.text_input("樓層 (地址一部分)", placeholder="15樓、3樓之2")
+    c_floor = st.text_input("樓層 (地址一部分)", placeholder="例如：15樓")
     c_name = st.text_input("案名/社區 (選填)", placeholder="例如：大附中別墅")
     
     st.divider()
-    st.subheader("📏 規格數據 (欄位完全清空)")
+    st.subheader("📏 規格數據 (欄位已清空)")
     s1, s2 = st.columns(2)
     with s1:
-        # 使用 text_input 讓初始狀態完全空白，方便直接輸入
-        c_land = st.text_input("地坪", placeholder="請輸入坪數")
-        c_build = st.text_input("總建坪", placeholder="請輸入坪數")
+        # 全部改用 text_input 並移除預設值，達成「乾淨白框」
+        c_land = st.text_input("地坪", placeholder="請輸入數字")
+        c_build = st.text_input("總建坪", placeholder="請輸入數字")
         c_age = st.text_input("屋齡 (年)", placeholder="請輸入數字")
     with s2:
-        c_inner = st.text_input("室內坪數 (主+附)", placeholder="請輸入坪數")
+        c_inner = st.text_input("室內坪數 (主+附)", placeholder="請輸入數字")
         c_width = st.text_input("面寬 (米)", placeholder="請輸入數字")
         c_elevator = st.selectbox("電梯", ["有", "無"])
         c_road = st.text_input("路寬 (米)", placeholder="請輸入數字")
         
-    c_price = st.text_input("開價 (萬)", placeholder="請輸入金額")
+    c_price = st.text_input("開價 (萬)", placeholder="請輸入開價")
     c_agent = st.text_input("承辦人", placeholder="您的姓名")
     
     submitted = st.form_submit_button("🚀 啟動全網掃描偵察")
 
-# --- 4. 偵察邏輯 ---
+# --- 4. 偵察邏輯與搜尋引擎優化 ---
 if submitted and model:
-    with st.spinner("🕵️ 樂福導師正在偵察中..."):
+    with st.spinner("🕵️ 樂福導師正在偵察並組合關鍵字..."):
         try:
-            time.sleep(1.2)
-            # 組合地址
+            time.sleep(1.5)
+            
+            # 1. 組合完整地址
             full_addr = f"{sel_city}{sel_dist}{road_name}{road_type}"
             if addr_sec: full_addr += f"{addr_sec}段"
             if addr_lane: full_addr += f"{addr_lane}巷"
             if addr_alley: full_addr += f"{addr_alley}弄"
             full_addr += f"{addr_num}號{c_floor}"
             
-            prompt = f"分析物件：{full_addr} ({c_name})，規格：地{c_land}/建{c_build}/室內{c_inner}坪/屋齡{c_age}，開價{c_price}萬。請提供行情比對與談價建議。"
-            
+            # 2. 生成分析報告
+            prompt = f"你是房仲專業導師。物件：{full_addr}，規格：地{c_land}/建{c_build}/室內{c_inner}坪/屋齡{c_age}，開價{c_price}萬。請對比行情給予承辦人{c_agent}談價建議。"
             res = model.generate_content(prompt).text
+            
             st.subheader(f"📊 {full_addr} 分析報告")
             st.markdown(res)
             
             st.divider()
-            st.subheader("🌐 全網搜尋連結")
-            search_q = f"{full_addr}+{c_inner}坪"
+            
+            # 3. [關鍵修正] 搜尋連結優化：將地址與坪數進行網址編碼
+            search_key = f"{sel_city}{sel_dist}{road_name} {c_inner}坪"
+            if c_name: search_key += f" {c_name}"
+            
+            encoded_key = urllib.parse.quote(search_key)
+            
+            st.subheader("🌐 即時前往全網搜尋結果")
             r1, r2, r3 = st.columns(3)
-            with r1: st.link_button("🏠 5168 搜尋照片", f"https://house.5168.com.tw/list?keywords={search_q}")
-            with r2: st.link_button("🏗️ 591 房屋交易", f"https://newhouse.591.com.tw/list?keywords={search_q}")
-            with r3: st.link_button("📈 樂居實價登錄", f"https://www.leju.com.tw/search/search_result?type=1&q={full_addr}")
+            with r1:
+                # 修正 5168 的關鍵字帶入方式
+                st.link_button("🏠 5168 搜尋照片/活案", f"https://house.5168.com.tw/list?keywords={encoded_key}")
+            with r2:
+                # 修正 591 的搜尋邏輯
+                st.link_button("🏗️ 591 房屋交易搜尋", f"https://newhouse.591.com.tw/list?keywords={encoded_key}")
+            with r3:
+                # 樂居則以區域為主，幫助看實價登錄
+                leju_key = urllib.parse.quote(f"{sel_city}{sel_dist}{road_name}")
+                st.link_button("📈 樂居實價登錄", f"https://www.leju.com.tw/search/search_result?type=1&q={leju_key}")
                 
         except Exception as e:
-            st.error(f"分析暫時失敗。原因：{e}")
+            st.error(f"分析失敗，請檢查金鑰或稍後再試。原因：{e}")
