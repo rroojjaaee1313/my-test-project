@@ -7,14 +7,24 @@ import io
 import PIL.Image
 import json
 
-# --- 1. 系統初始化 ---
+# --- 1. 系統初始化與金鑰設定 ---
+# 先定義模型名稱，確保全域都能讀到
+MODEL_NAME = 'gemini-1.5-flash' 
+
 try:
-    API_KEY = st.secrets["GEMINI_API_KEY"]
-    genai.configure(api_key=API_KEY)
-    # 這裡可以補上一行測試，確保能抓到模型
+    if "GEMINI_API_KEY" in st.secrets:
+        API_KEY = st.secrets["GEMINI_API_KEY"]
+        genai.configure(api_key=API_KEY)
+    else:
+        st.error("❌ 找不到 API 金鑰，請檢查 Streamlit Secrets 設定。")
+        st.stop()
+        
+    # 在這裡建立模型物件
     model = genai.GenerativeModel(MODEL_NAME)
+    
 except Exception as e:
     st.error(f"❌ 初始化失敗: {e}")
+    st.stop()
 
 st.set_page_config(page_title="老鷹 AI 長期助理", layout="wide")
 
