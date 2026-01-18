@@ -7,22 +7,45 @@ import io
 import json
 from datetime import datetime
 
-# --- 1. 系統初始化 (解決 404 與品牌設定) ---
+# --- 1. 系統初始化 (修正 404 模型路徑與自動偵測) ---
 st.set_page_config(page_title="樂福全能情報中心", layout="wide", page_icon="🦅")
 
-try:
-    if "GEMINI_API_KEY" in st.secrets:
-        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-        # 使用穩定版完整路徑，避免 v1beta 路由錯誤
-        model = genai.GenerativeModel(model_name='models/gemini-1.5-flash')
-    else:
+# 初始化模型函數，解決版本路由問題
+@st.cache_resource
+def init_gemini_model():
+    if "GEMINI_API_KEY" not in st.secrets:
         st.error("❌ 找不到 API 金鑰，請檢查 Streamlit Secrets 設定。")
-        st.stop()
-except Exception as e:
-    st.error(f"❌ 初始化失敗: {e}")
-    st.stop()
+        return None
+    
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    
+    # 嘗試多種模型名稱格式以避開 404
+    model_candidates = ['gemini-1.5-flash', 'models/gemini-1.5-flash']
+    
+    # 1. 先嘗試清單偵測
+    try:
+        available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+        if available_models:
+            # 優先找包含 flash 的模型
+            flash_models = [name for name in available_models if 'flash' in name]
+            target = flash_models[0] if flash_models else available_models[0]
+            return genai.GenerativeModel(model_name=target)
+    except:
+        pass
+    
+    # 2. 若偵測失敗，手動強制嘗試
+    for m_name in model_candidates:
+        try:
+            temp_model = genai.GenerativeModel(model_name=m_name)
+            temp_model.generate_content("test", generation_config={"max_output_tokens": 1})
+            return temp_model
+        except:
+            continue
+    return None
 
-# --- 2. 數據儲存功能 ---
+model = init_gemini_model()
+
+# --- 2. 數據儲存邏輯 ---
 DATA_FILE = "case_reports.json"
 def save_report(data):
     current_data = []
@@ -47,7 +70,7 @@ with st.sidebar:
         st.success("紀錄已清除")
         st.rerun()
     st.divider()
-    st.info("💡 系統已優化：輸入地坪與建坪可獲得更精準的單價分析建議。")
+    st.info("💡 提示：輸入地坪與建坪可獲得更精準的單價分析建議。")
 
 col_in, col_res = st.columns([1, 1.3])
 
@@ -65,8 +88,8 @@ if uploaded_pdf:
 
 with col_in:
     st.subheader("📝 案件情報回報")
-    with st.form("love_pro_form"):
-        c_name = st.text_input("🏠 案件/社區名稱", placeholder="例如：大附中電梯別墅")
+    with st.form("love_ultimate_form"):
+        c_name = st.text_input("🏠 案件/社區名稱", placeholder="例如：大附中別墅")
         c_loc = st.text_input("📍 區域/路段", placeholder="例如：大里區東榮路")
         
         # 坪數與價格輸入區
@@ -83,7 +106,9 @@ with col_in:
 
 # --- 4. 核心情報邏輯 ---
 if submitted:
-    if not c_name or not c_loc:
+    if model is None:
+        st.error("❌ 模型連結失敗，請檢查 API Key 權限。")
+    elif not c_name or not c_loc:
         st.error("請填寫基本案件資訊")
     else:
         with col_res:
@@ -94,48 +119,46 @@ if submitted:
                     
                     prompt = f"""
                     你是一位專業的「樂福團隊」房產導師。
-                    【培訓教材背景】：{context_text[:1500] if context_text else "專業房仲經驗"}
-                    【目標物件】：{c_name} ({c_loc})
-                    【詳細條件】：地坪 {c_land} 坪 / 建坪 {c_build} 坪 / 總價 {c_price} 萬 (建坪單價約 {unit_price} 萬)
+                    背景教材：{context_text[:1500] if context_text else "專業房仲經驗"}
+                    目標物件：{c_loc} {c_name}
+                    條件：地坪 {c_land} 坪 / 建坪 {c_build} 坪 / 總價 {c_price} 萬 (單價約 {unit_price} 萬/坪)
                     
-                    任務內容：
+                    任務：
                     1. **精準行情比對**：根據此坪數與單價，分析周邊在售物件的行情是否合理。
-                    2. **同業競爭掃描**：分析 591、5168、住商、永慶等平台可能的相似坪數競品。
-                    3. **戰術指導**：針對承辦人 {c_agent}，給予具體的「單價優勢」說法或議價建議。
+                    2. **活案搜尋建議**：分析市場上 5168、住商、永慶等平台可能的競品。
+                    3. **戰術指導**：針對承辦人 {c_agent}，分析此物件的優勢並給予議價建議。
                     
-                    注意：請勿自行虛構假網址，僅提供基於數據的專業分析。
+                    注意：請勿虛構假網址，僅提供基於數據的專業分析。
                     """
                     
                     response = model.generate_content(prompt)
-                    analysis_text = response.text
-                    
                     st.success("✅ 樂福導師分析完成")
-                    st.markdown(analysis_text)
+                    st.markdown(response.text)
                     
                     # 語音功能
-                    audio_text = f"樂福導師提醒{c_agent}，已根據地坪{c_land}坪與建坪{c_build}坪完成深度行情分析，請查看結果。"
+                    audio_text = f"樂福導師提醒{c_agent}，分析已完成，請查看結果。"
                     tts = gTTS(text=audio_text, lang='zh-tw')
                     audio_fp = io.BytesIO()
                     tts.write_to_fp(audio_fp)
                     st.audio(audio_fp, format='audio/mp3')
                     
-                    # --- 外部即時搜尋工具 (帶入坪數關鍵字) ---
+                    # --- 外部即時搜尋工具 ---
                     st.divider()
-                    st.subheader("🌐 即時官網活案監測 (點擊開啟)")
-                    search_q = f"{c_loc}+{c_name}+{c_land}坪+{c_build}坪"
+                    st.subheader("🌐 即時官網搜尋 (點擊開啟)")
+                    search_q = f"{c_loc}+{c_name}+{c_land}坪"
                     
                     b1, b2, b3 = st.columns(3)
                     with b1:
-                        st.link_button("🏠 5168 官網搜尋", f"https://house.5168.com.tw/list?keywords={search_q}")
+                        st.link_button("🏠 5168 搜尋", f"https://house.5168.com.tw/list?keywords={search_q}")
                     with b2:
-                        st.link_button("🏢 住商房屋搜尋", f"https://www.hbhousing.com.tw/buy-house/?q={search_q}")
+                        st.link_button("🏢 住商搜尋", f"https://www.hbhousing.com.tw/buy-house/?q={search_q}")
                     with b3:
-                        st.link_button("🏗️ 永慶房仲網搜尋", f"https://buy.yungching.com.tw/list?q={search_q}")
+                        st.link_button("🏗️ 永慶搜尋", f"https://buy.yungching.com.tw/list?q={search_q}")
                     
-                    # 存檔紀錄
+                    # 存檔
                     save_report({
                         "time": datetime.now().strftime("%Y-%m-%d %H:%M"), 
-                        "case": c_name, "agent": c_agent, "analysis": analysis_text
+                        "case": c_name, "agent": c_agent, "analysis": response.text
                     })
                     
                 except Exception as e:
@@ -143,12 +166,12 @@ if submitted:
 
 # --- 5. 樂福歷史情報庫 ---
 st.divider()
-st.subheader("📚 樂福歷史案件情報庫 (團隊共享)")
+st.subheader("📚 樂福歷史案件情報庫")
 if os.path.exists(DATA_FILE):
     try:
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             history = json.load(f)
         for h in reversed(history[-10:]):
-            with st.expander(f"📌 {h.get('case', '未知')} - {h.get('agent', '未知')} ({h.get('time', '')})"):
-                st.markdown(h.get('analysis', '無內容'))
+            with st.expander(f"📌 {h.get('case')} - {h.get('agent')} ({h.get('time')})"):
+                st.markdown(h.get('analysis'))
     except: pass
