@@ -10,16 +10,16 @@ import json
 # --- 1. 系統初始化 ---
 try:
     API_KEY = st.secrets["GEMINI_API_KEY"]
-    # 這裡將設定放入 try 區塊內，並加上您需要的 transport 參數
-    genai.configure(api_key=API_KEY, transport='grpc')
+    genai.configure(api_key=API_KEY)
+    # 這裡可以補上一行測試，確保能抓到模型
+    model = genai.GenerativeModel(MODEL_NAME)
 except Exception as e:
-    st.error("❌ 找不到 API 金鑰或設定失敗，請檢查 Streamlit Secrets 設定。")
-    st.stop()
+    st.error(f"❌ 初始化失敗: {e}")
 
 st.set_page_config(page_title="老鷹 AI 長期助理", layout="wide")
 
 # 使用穩定版的模型名稱格式
-MODEL_NAME = 'gemini-1.5-flash'
+MODEL_NAME = 'models/gemini-1.5-flash'
 # 初始化模型
 try:
     model = genai.GenerativeModel(model_name=MODEL_NAME)
