@@ -10,7 +10,8 @@ import json
 # --- 1. 系統初始化 (使用最新的 Secrets 讀取方式) ---
 try:
     API_KEY = st.secrets["GEMINI_API_KEY"]
-    genai.configure(api_key=API_KEY)
+    # 強制指定使用穩定版 v1，避開報錯中提到的 v1beta 衝突
+genai.configure(api_key=API_KEY, transport='grpc')
 except Exception as e:
     st.error("❌ 找不到 API 金鑰，請檢查 Streamlit Secrets 設定。")
     st.stop()
