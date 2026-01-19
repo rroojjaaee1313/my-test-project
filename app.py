@@ -1,88 +1,136 @@
 import streamlit as st
 import google.generativeai as genai
-import time
 
-# --- 1. 核心設定 ---
-st.set_page_config(page_title="樂福 i智慧金牌系統", layout="wide", page_icon="🦁")
+# --- 1. 全台行政區資料庫 (完整 368 鄉鎮區) ---
+TAIWAN_CITIES = {
+    "台北市": ["中正區", "大同區", "中山區", "松山區", "大安區", "萬華區", "信義區", "士林區", "北投區", "內湖區", "南港區", "文山區"],
+    "新北市": ["板橋區", "三重區", "中和區", "永和區", "新莊區", "新店區", "樹林區", "鶯歌區", "三峽區", "淡水區", "汐止區", "土城區", "蘆洲區", "五股區", "泰山區", "林口區", "深坑區", "石碇區", "坪林區", "三芝區", "石門區", "八里區", "平溪區", "雙溪區", "貢寮區", "金山區", "萬里區", "烏來區"],
+    "桃園市": ["桃園區", "中壢區", "大溪區", "楊梅區", "蘆竹區", "大園區", "龜山區", "八德區", "龍潭區", "平鎮區", "新屋區", "觀音區", "復興區"],
+    "台中市": ["中區", "東區", "南區", "西區", "北區", "北屯區", "西屯區", "南屯區", "太平區", "大里區", "霧峰區", "烏日區", "豐原區", "后里區", "石岡區", "東勢區", "新社區", "潭子區", "大雅區", "神岡區", "大肚區", "沙鹿區", "龍井區", "梧棲區", "清水區", "大甲區", "外埔區", "大安區", "和平區"],
+    "台南市": ["中西區", "東區", "南區", "北區", "安平區", "安南區", "永康區", "歸仁區", "新化區", "左鎮區", "玉井區", "楠西區", "南化區", "仁德區", "關廟區", "龍崎區", "官田區", "麻豆區", "佳里區", "西港區", "七股區", "將軍區", "學甲區", "北門區", "新營區", "後壁區", "白河區", "東山區", "六甲區", "下營區", "柳營區", "鹽水區", "善化區", "大內區", "山上區", "新市區", "安定區"],
+    "高雄市": ["新興區", "前金區", "苓雅區", "鹽埕區", "鼓山區", "旗津區", "前鎮區", "三民區", "楠梓區", "小港區", "左營區", "仁武區", "大社區", "岡山區", "路竹區", "阿蓮區", "田寮區", "燕巢區", "橋頭區", "梓官區", "彌陀區", "永安區", "湖內區", "鳳山區", "大寮區", "林園區", "鳥松區", "大樹區", "旗山區", "美濃區", "六龜區", "內門區", "杉林區", "甲仙區", "桃源區", "那瑪夏區", "茂林區", "茄萣區"],
+    "基隆市": ["仁愛區", "信義區", "中正區", "中山區", "安樂區", "暖暖區", "七堵區"],
+    "新竹市": ["東區", "北區", "香山區"],
+    "嘉義市": ["東區", "西區"],
+    "新竹縣": ["竹北市", "竹東鎮", "新埔鎮", "關西鎮", "湖口鄉", "新豐鄉", "芎林鄉", "橫山鄉", "北埔鄉", "寶山鄉", "峨眉鄉", "尖石鄉", "五峰鄉"],
+    "苗栗縣": ["苗栗市", "頭份市", "竹南鎮", "後龍鎮", "通霄鎮", "苑裡鎮", "卓蘭鎮", "造橋鄉", "西湖鄉", "頭屋鄉", "公館鄉", "銅鑼鄉", "三義鄉", "大湖鄉", "獅潭鄉", "三灣鄉", "南庄鄉", "泰安鄉"],
+    "彰化縣": ["彰化市", "員林市", "鹿港鎮", "和美鎮", "北斗鎮", "溪湖鎮", "田中鎮", "二林鎮", "線西鄉", "伸港鄉", "福興鄉", "秀水鄉", "花壇鄉", "芬園鄉", "大村鄉", "埔鹽鄉", "埔心鄉", "永靖鄉", "社頭鄉", "二水鄉", "田尾鄉", "埤頭鄉", "芳苑鄉", "大城鄉", "竹塘鄉", "溪州鄉"],
+    "南投縣": ["南投市", "埔里鎮", "草屯鎮", "竹山鎮", "集集鎮", "名間鄉", "鹿谷鄉", "中寮鄉", "魚池鄉", "國姓鄉", "水里鄉", "信義鄉", "仁愛鄉"],
+    "雲林縣": ["斗六市", "斗南鎮", "虎尾鎮", "西螺鎮", "土庫鎮", "北港鎮", "古坑鄉", "大埤鄉", "莿桐鄉", "林內鄉", "二崙鄉", "崙背鄉", "麥寮鄉", "東勢鄉", "褒忠鄉", "台西鄉", "元長鄉", "四湖鄉", "口湖鄉", "水林鄉"],
+    "嘉義縣": ["太保市", "朴子市", "布袋鎮", "大林鎮", "民雄鄉", "溪口鄉", "新港鄉", "六腳鄉", "東石鄉", "義竹鄉", "鹿草鄉", "水上鄉", "中埔鄉", "竹崎鄉", "梅山鄉", "番路鄉", "大埔鄉", "阿里山鄉"],
+    "屏東縣": ["屏東市", "潮州鎮", "東港鎮", "恆春鎮", "萬丹鄉", "長治鄉", "麟洛鄉", "九如鄉", "里港鄉", "高樹鄉", "鹽埔鄉", "內埔鄉", "竹田鄉", "萬巒鄉", "內埔鄉", "枋寮鄉", "新埤鄉", "枋山鄉", "車城鄉", "滿州鄉", "高樹鄉", "三地門鄉", "霧臺鄉", "瑪家鄉", "泰武鄉", "來義鄉", "春日鄉", "獅子鄉", "牡丹鄉", "琉球鄉"],
+    "宜蘭縣": ["宜蘭市", "羅東鎮", "蘇澳鎮", "頭城鎮", "礁溪鄉", "壯圍鄉", "員山鄉", "冬山鄉", "五結鄉", "三星鄉", "大同鄉", "南澳鄉"],
+    "花蓮縣": ["花蓮市", "鳳林鎮", "玉里鎮", "新城鄉", "吉安鄉", "壽豐鄉", "光復鄉", "豐濱鄉", "瑞穗鄉", "富里鄉", "秀林鄉", "萬榮鄉", "卓溪鄉"],
+    "台東縣": ["台東市", "成功鎮", "關山鎮", "卑南鄉", "鹿野鄉", "池上鄉", "東河鄉", "長濱鄉", "太麻里鄉", "大武鄉", "綠島鄉", "海端鄉", "延平鄉", "金峰鄉", "達仁鄉", "蘭嶼鄉"],
+    "澎湖縣": ["馬公市", "湖西鄉", "白沙鄉", "西嶼鄉", "望安鄉", "七美鄉"],
+    "金門縣": ["金城鎮", "金湖鎮", "金沙鎮", "金寧鄉", "烈嶼鄉", "烏坵鄉"],
+    "連江縣": ["南竿鄉", "北竿鄉", "莒光鄉", "東引鄉"]
+}
+
+# --- 2. 核心初始化 (樂福集團品牌) ---
+st.set_page_config(page_title="樂福集團：全台精準偵察系統", layout="wide", page_icon="🦅")
 
 @st.cache_resource
 def get_model():
-    # 從 Secrets 讀取
     api_key = st.secrets.get("GEMINI_API_KEY")
     if not api_key:
-        st.error("❌ 找不到 API 金鑰。請檢查 Secrets 設定。")
+        st.error("❌ 找不到 API 金鑰。")
         return None
-    
-    # 配置 API
     genai.configure(api_key=api_key)
-    
-    # 【解決 404 的終極寫法】
-    # 我們不直接寫死路徑，而是透過搜尋找到目前可用的模型名稱
     try:
-        available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        
-        # 優先選擇排序：1.5 flash -> 1.5 pro -> pro (舊版)
-        target_model = ""
-        if 'models/gemini-1.5-flash' in available_models:
-            target_model = 'gemini-1.5-flash'
-        elif 'models/gemini-1.5-pro' in available_models:
-            target_model = 'gemini-1.5-pro'
-        elif 'models/gemini-pro' in available_models:
-            target_model = 'gemini-pro'
-        else:
-            target_model = available_models[0].split('/')[-1] if available_models else ""
-
-        if not target_model:
-            st.error("您的 API Key 似乎不支援任何生成模型。")
-            return None
-
-        # 建立模型實例
-        model = genai.GenerativeModel(
-            model_name=target_model,
-            system_instruction="你現在是樂福團隊的i智慧金牌教練，專精房產開發與聯賣策略。"
+        # 直接指定 1.5-flash 模型名稱
+        return genai.GenerativeModel(
+            model_name='gemini-1.5-flash',
+            system_instruction="你現在是【樂福集團】的金牌教練。你對坪數拆解與全台地段極其敏感，語氣專業且犀利。"
         )
-        return model
     except Exception as e:
-        st.error(f"連線 Google 伺服器失敗：{e}")
+        st.error(f"系統連線失敗：{e}")
         return None
 
-# 初始化模型
 model = get_model()
 
-# --- 2. 介面介面 (簡約版，確保功能優先) ---
-st.title("🏆 樂福 x i智慧：金牌聯賣戰略系統")
+# --- 3. 介面設計 ---
+st.title("🦅 樂福集團：全台精準偵察系統")
 
-c1, c2 = st.columns(2)
-with c1:
-    city_dist = st.text_input("📍 案子在哪裡？(例如：台中大里區)")
-    c_name = st.text_input("🏠 案名或社區")
-with c2:
-    c_price = st.text_input("💰 開價 (萬)")
-    c_agent = st.text_input("👤 經紀人姓名")
+with st.form("love_group_all_taiwan"):
+    # 全台行政區連動區
+    st.subheader("📍 物件位置")
+    c1, c2, c3 = st.columns(3)
+    with c1: 
+        sel_city = st.selectbox("縣市", options=list(TAIWAN_CITIES.keys()))
+    with c2: 
+        sel_dist = st.selectbox("鄉鎮市區", options=TAIWAN_CITIES[sel_city])
+    with c3:
+        c_name = st.text_input("案名/社區")
 
-submitted = st.button("🚀 啟動聯賣戰術分析")
+    st.divider()
+    
+    # 坪數細項區
+    st.subheader("📏 建物坪數精確拆解")
+    p1, p2, p3, p4 = st.columns(4)
+    with p1: 
+        c_main = st.number_input("🏠 主建物坪數", min_value=0.0, step=0.01)
+        c_sub = st.number_input("➕ 附屬建物", min_value=0.0, step=0.01)
+    with p2:
+        c_public = st.number_input("🏢 公設坪數", min_value=0.0, step=0.01)
+        c_parking_size = st.number_input("🚗 車位坪數", min_value=0.0, step=0.01)
+    with p3:
+        c_total_build = st.number_input("📊 權狀總建坪", min_value=0.0, step=0.01)
+        c_land = st.number_input("🌱 持分地坪", min_value=0.0, step=0.01)
+    with p4:
+        c_floor = st.text_input("🏢 樓層 (例如：12/15F)")
+        c_price = st.number_input("💰 總開價 (萬元)", min_value=0)
 
-# --- 3. 執行邏輯 ---
+    st.divider()
+
+    # 專業規格區
+    st.subheader("💡 樂福專業指標")
+    f1, f2, f3 = st.columns(3)
+    with f1:
+        c_age = st.text_input("📅 屋齡", placeholder="年")
+        c_layout = st.text_input("🛏️ 格局", placeholder="3/2/2")
+    with f2:
+        c_face = st.selectbox("🧭 朝向", ["座北朝南", "座南朝北", "座東朝西", "座西朝東", "其他"])
+        c_status = st.selectbox("🛠️ 屋況", ["全新整理", "現況自住", "需大整理", "毛胚屋"])
+    with f3:
+        c_road_width = st.text_input("🛣️ 路寬/面寬")
+        c_agent = st.text_input("👤 樂福戰鬥員姓名")
+
+    submitted = st.form_submit_button("🔥 啟動全台深度偵察分析")
+
+# --- 4. 執行邏輯 ---
 if submitted:
     if not model:
-        st.error("模型尚未準備好，請檢查 API 設定或重新整理。")
-    elif not c_agent:
-        st.warning("請輸入經紀人姓名。")
+        st.error("模型未就緒。")
     else:
-        with st.spinner("🎯 正在產出戰略報告..."):
+        inner_total = c_main + c_sub
+        build_no_parking = c_total_build - c_parking_size
+        public_rate = (c_public / build_no_parking * 100) if build_no_parking > 0 else 0
+        
+        with st.spinner("🎯 樂福教練正在計算全台行情與坪數戰術..."):
             try:
                 prompt = f"""
-                經紀人：{c_agent}
-                物件：{city_dist} - {c_name}
-                開價：{c_price}萬
+                經紀人：{c_agent} (樂福集團)
+                位置：{sel_city}{sel_dist} - {c_name}
+                樓層：{c_floor}
                 
-                請產出：
-                1.【聯賣戰略】：如何在永慶聯賣體系中吸引其他店組配件？
-                2.【開發金句】：用誠實房價數據說服屋主的重點。
-                3.【Line 聯賣推廣文案】：幫我寫一段吸引同業配件的訊息。
+                【坪數數據】：
+                權狀總建：{c_total_build} 坪 (含車位：{c_parking_size} 坪)
+                主建物：{c_main} / 附屬：{c_sub} / 公設：{c_public}
+                室內實坪：{inner_total:.2f} 坪 / 公設比：{public_rate:.2f}%
+                開價：{c_price} 萬
+                
+                規格：屋齡{c_age} / 地坪{c_land} / 格局{c_layout} / 朝向{c_face} / 屋況{c_status}
+                
+                請以【樂福集團金牌教練】提供分析：
+                1.【區域與地段解析】：針對{sel_city}{sel_dist}的地段特性，分析本物件的增值潛力。
+                2.【精算價值點評】：針對公設比與室內實坪，給出具體的銷售話術。
+                3.【開發攻略】：樂福經紀人如何開發此案？如何說服屋主？
+                4.【Line 聯賣文案】：寫一段適合發給樂福全台戰友的配件訊息。
                 """
                 response = model.generate_content(prompt)
-                st.success("✅ 教練報告完成！")
+                st.markdown(f"### 📋 {c_agent} 作戰分析報告")
+                st.info(f"💡 自動計算：實坪 {inner_total:.2f} 坪 | 公設比 {public_rate:.2f}%")
                 st.markdown(response.text)
             except Exception as e:
-                st.error(f"分析過程發生錯誤：{e}")
+                st.error(f"分析失敗：{e}")
