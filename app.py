@@ -1,18 +1,34 @@
 import streamlit as st
 import google.generativeai as genai
-from google.generativeai.types import RequestOptions
 
-# --- 1. 初始化與全台行政區 (保持連動功能) ---
+# --- 1. 全台完整縣市清單 (全納入) ---
 TAIWAN_CITIES = {
-    "台中市": ["中區", "東區", "南區", "西區", "北區", "北屯區", "西屯區", "南屯區", "太平區", "大里區", "霧峰區", "烏日區", "豐原區", "后里區", "石岡區", "東勢區", "新社區", "潭子區", "大雅區", "神岡區", "大肚區", "沙鹿區", "龍井區", "梧棲區", "清水區", "大甲區", "外埔區", "大安區", "和平區"],
     "台北市": ["中正區", "大同區", "中山區", "松山區", "大安區", "萬華區", "信義區", "士林區", "北投區", "內湖區", "南港區", "文山區"],
     "新北市": ["板橋區", "三重區", "中和區", "永和區", "新莊區", "新店區", "樹林區", "鶯歌區", "三峽區", "淡水區", "汐止區", "土城區", "蘆洲區", "五股區", "泰山區", "林口區", "深坑區", "石碇區", "坪林區", "三芝區", "石門區", "八里區", "平溪區", "雙溪區", "貢寮區", "金山區", "萬里區", "烏來區"],
     "桃園市": ["桃園區", "中壢區", "大溪區", "楊梅區", "蘆竹區", "大園區", "龜山區", "八德區", "龍潭區", "平鎮區", "新屋區", "觀音區", "復興區"],
+    "台中市": ["中區", "東區", "南區", "西區", "北區", "北屯區", "西屯區", "南屯區", "太平區", "大里區", "霧峰區", "烏日區", "豐原區", "后里區", "石岡區", "東勢區", "新社區", "潭子區", "大雅區", "神岡區", "大肚區", "沙鹿區", "龍井區", "梧棲區", "清水區", "大甲區", "外埔區", "大安區", "和平區"],
     "台南市": ["中西區", "東區", "南區", "北區", "安平區", "安南區", "永康區", "歸仁區", "新化區", "左鎮區", "玉井區", "楠西區", "南化區", "仁德區", "關廟區", "龍崎區", "官田區", "麻豆區", "佳里區", "西港區", "七股區", "將軍區", "學甲區", "北門區", "新營區", "後壁區", "白河區", "東山區", "六甲區", "下營區", "柳營區", "鹽水區", "善化區", "大內區", "山上區", "新市區", "安定區"],
     "高雄市": ["新興區", "前金區", "苓雅區", "鹽埕區", "鼓山區", "旗津區", "前鎮區", "三民區", "楠梓區", "小港區", "左營區", "仁武區", "大社區", "岡山區", "路竹區", "阿蓮區", "田寮區", "燕巢區", "橋頭區", "梓官區", "彌陀區", "永安區", "湖內區", "鳳山區", "大寮區", "林園區", "鳥松區", "大樹區", "旗山區", "美濃區", "六龜區", "內門區", "杉林區", "甲仙區", "桃源區", "那瑪夏區", "茂林區", "茄萣區"],
+    "基隆市": ["仁愛區", "信義區", "中正區", "中山區", "安樂區", "暖暖區", "七堵區"],
+    "新竹市": ["東區", "北區", "香山區"],
+    "嘉義市": ["東區", "西區"],
+    "新竹縣": ["竹北市", "竹東鎮", "新埔鎮", "關西鎮", "湖口鄉", "新豐鄉", "芎林鄉", "橫山鄉", "北埔鄉", "寶山鄉", "峨眉鄉", "尖石鄉", "五峰鄉"],
+    "苗栗縣": ["苗栗市", "頭份市", "竹南鎮", "後龍鎮", "通霄鎮", "苑裡鎮", "卓蘭鎮", "造橋鄉", "西湖鄉", "頭屋鄉", "公館鄉", "銅鑼鄉", "三義鄉", "大湖鄉", "獅潭鄉", "三灣鄉", "南庄鄉", "泰安鄉"],
+    "彰化縣": ["彰化市", "員林市", "鹿港鎮", "和美鎮", "北斗鎮", "溪湖鎮", "田中鎮", "二林鎮", "線西鄉", "伸港鄉", "福興鄉", "秀水鄉", "花壇鄉", "芬園鄉", "大村鄉", "埔鹽鄉", "埔心鄉", "永靖鄉", "社頭鄉", "二水鄉", "田尾鄉", "埤頭鄉", "芳苑鄉", "大城鄉", "竹塘鄉", "溪州鄉"],
+    "南投縣": ["南投市", "埔里鎮", "草屯鎮", "竹山鎮", "集集鎮", "名間鄉", "鹿谷鄉", "中寮鄉", "魚池鄉", "國姓鄉", "水里鄉", "信義鄉", "仁愛鄉"],
+    "雲林縣": ["斗六市", "斗南鎮", "虎尾鎮", "西螺鎮", "土庫鎮", "北港鎮", "古坑鄉", "大埤鄉", "莿桐鄉", "林內鄉", "二崙鄉", "崙背鄉", "麥寮鄉", "東勢鄉", "褒忠鄉", "台西鄉", "元長鄉", "四湖鄉", "口湖鄉", "水林鄉"],
+    "嘉義縣": ["太保市", "朴子市", "布袋鎮", "大林鎮", "民雄鄉", "溪口鄉", "新港鄉", "六腳鄉", "東石鄉", "義竹鄉", "鹿草鄉", "水上鄉", "中埔鄉", "竹崎鄉", "梅山鄉", "番路鄉", "大埔鄉", "阿里山鄉"],
+    "屏東縣": ["屏東市", "潮州鎮", "東港鎮", "恆春鎮", "萬丹鄉", "長治鄉", "麟洛鄉", "九如鄉", "里港鄉", "高樹鄉", "鹽埔鄉", "內埔鄉", "竹田鄉", "萬巒鄉", "枋寮鄉", "新埤鄉", "枋山鄉", "車城鄉", "滿州鄉", "琉球鄉", "三地門鄉", "霧臺鄉", "瑪家鄉", "泰武鄉", "來義鄉", "春日鄉", "獅子鄉", "牡丹鄉"],
+    "宜蘭縣": ["宜蘭市", "羅東鎮", "蘇澳鎮", "頭城鎮", "礁溪鄉", "壯圍鄉", "員山鄉", "冬山鄉", "五結鄉", "三星鄉", "大同鄉", "南澳鄉"],
+    "花蓮縣": ["花蓮市", "鳳林鎮", "玉里鎮", "新城鄉", "吉安鄉", "壽豐鄉", "光復鄉", "豐濱鄉", "瑞穗鄉", "富里鄉", "秀林鄉", "萬榮鄉", "卓溪鄉"],
+    "台東縣": ["台東市", "成功鎮", "關山鎮", "卑南鄉", "鹿野鄉", "池上鄉", "東河鄉", "長濱鄉", "太麻里鄉", "大武鄉", "綠島鄉", "海端鄉", "延平鄉", "金峰鄉", "達仁鄉", "蘭嶼鄉"],
+    "澎湖縣": ["馬公市", "湖西鄉", "白沙鄉", "西嶼鄉", "望安鄉", "七美鄉"],
+    "金門縣": ["金城鎮", "金湖鎮", "金沙鎮", "金寧鄉", "烈嶼鄉", "烏坵鄉"],
+    "連江縣": ["南竿鄉", "北竿鄉", "莒光鄉", "東引鄉"]
 }
 
-st.set_page_config(page_title="樂福集團：金牌偵察系統", layout="wide", page_icon="🦅")
+# --- 2. 核心初始化 ---
+st.set_page_config(page_title="樂福集團：金牌偵察系統 PRO", layout="wide", page_icon="🦅")
 
 @st.cache_resource
 def get_model():
@@ -20,40 +36,33 @@ def get_model():
     if not api_key:
         st.error("❌ 找不到 API 金鑰。")
         return None
-    
-    # 配置 API
     genai.configure(api_key=api_key)
-    
-    try:
-        # 【核心修復】強制使用 v1 版本，避開 v1beta 導致的 NotFound 錯誤
-        model = genai.GenerativeModel(
-            model_name='models/gemini-1.5-flash',
-            system_instruction="你現在是樂福集團金牌教練。你對坪數拆解與全台地段極其敏感，語氣專業且犀利。"
-        )
-        return model
-    except Exception as e:
-        st.error(f"模型初始化失敗：{e}")
-        return None
+    return genai.GenerativeModel(model_name='gemini-1.5-flash', 
+                                system_instruction="你現在是【樂福集團】金牌教練。你擁有深厚房產經驗，語氣專業且犀利。")
 
 model = get_model()
 
-# --- 2. 介面設計 ---
-st.title("🦅 樂福集團：金牌偵察系統 (最終修復版)")
+# --- 3. 介面設計 (連動地址格式補完) ---
+st.title("🦅 樂福集團：全台精準偵察系統")
 
-# 地址連動 (Form 外)
+# 地址區域 (Form 外以利連動)
 st.subheader("📍 詳細物件地址")
-a1, a2, a3, a4, a5, a6 = st.columns([1.5, 1.5, 2, 1, 1, 1.5])
-with a1: sel_city = st.selectbox("縣市", options=list(TAIWAN_CITIES.keys()), index=0)
-with a2: sel_dist = st.selectbox("鄉鎮市區", options=TAIWAN_CITIES.get(sel_city, ["請選擇"]))
+a1, a2, a3, a4, a5 = st.columns([1.5, 1.5, 2, 1, 1])
+with a1: sel_city = st.selectbox("縣市", options=list(TAIWAN_CITIES.keys()), index=3) # 預設台中
+with a2: sel_dist = st.selectbox("區域", options=TAIWAN_CITIES[sel_city])
 with a3: road_name = st.text_input("路街名", placeholder="例如：崇德路")
-with a4: addr_sec = st.text_input("段", placeholder="例如：三")
-with a5: addr_num = st.text_input("號", placeholder="例如：100")
-with a6: addr_floor = st.text_input("樓層", placeholder="例如：12樓之1")
+with a4: addr_lane = st.text_input("巷", placeholder="例如：10")
+with a5: addr_alley = st.text_input("弄", placeholder="例如：5")
 
-with st.form("love_pro_form"):
-    c_name = st.text_input("🏠 案名/社區名稱 (選填)")
+b1, b2, b3, b4 = st.columns([1, 1, 1.5, 2.5])
+with b1: addr_sec = st.text_input("段")
+with b2: addr_num = st.text_input("號")
+with b3: addr_floor = st.text_input("樓層", placeholder="例如：12樓之1")
+with b4: c_name = st.text_input("🏠 案名/社區名稱")
+
+with st.form("love_group_pro_form"):
     st.divider()
-    
+    # 坪數自由輸入區 (text_input)
     st.subheader("📏 建物坪數拆解 (空白處自由輸入)")
     p1, p2, p3, p4 = st.columns(4)
     with p1: 
@@ -70,7 +79,7 @@ with st.form("love_pro_form"):
         c_price = st.text_input("💰 總開價")
 
     st.divider()
-    st.subheader("💡 樂福專業戰術指標")
+    # 專業指標
     f1, f2, f3 = st.columns(3)
     with f1:
         c_age = st.text_input("📅 屋齡")
@@ -84,22 +93,14 @@ with st.form("love_pro_form"):
 
     submitted = st.form_submit_button("🔥 啟動金牌戰略分析報告")
 
-# --- 3. 分析邏輯 (加入強制版本選擇) ---
+# --- 4. 分析邏輯 ---
 if submitted and model:
-    full_addr = f"{sel_city}{sel_dist}{road_name}{addr_sec}段{addr_num}號{addr_floor}"
-    
-    with st.spinner("🎯 樂福教練正在進行深度拆解..."):
+    full_addr = f"{sel_city}{sel_dist}{road_name}{addr_lane}巷{addr_alley}弄{addr_sec}段{addr_num}號{addr_floor}"
+    with st.spinner("🎯 樂福教練正在精算戰略..."):
         try:
-            prompt = f"經紀人：{c_agent} (樂福集團)。物件地址：{full_addr}。總建坪：{c_total}。請給予專業戰略分析。"
-            
-            # 【核心修復】在發送請求時，強制指定 API 版本為 v1
-            response = model.generate_content(
-                prompt,
-                options=RequestOptions(api_version='v1')
-            )
-            
+            prompt = f"經紀人：{c_agent}(樂福集團)。地址：{full_addr}。社區：{c_name}。總建：{c_total}。主建物：{c_main}。請進行深度分析。"
+            response = model.generate_content(prompt)
             st.markdown(f"### 📋 {c_agent} 專屬作戰報告")
             st.markdown(response.text)
         except Exception as e:
-            st.error(f"分析失敗，錯誤訊息：{e}")
-            st.info("💡 如果依然出現 404，請確認您的 API 金鑰是在 Google AI Studio 申請的最新版本。")
+            st.error(f"分析失敗，若持續 404 請檢查 API Key：{e}")
