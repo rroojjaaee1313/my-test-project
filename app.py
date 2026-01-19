@@ -3,89 +3,86 @@ import google.generativeai as genai
 import time
 import urllib.parse
 
-# --- 1. 初始化與 404 錯誤修復 ---
+# --- 1. 核心初始化 (強制避開 v1beta 錯誤路徑) ---
 st.set_page_config(page_title="樂福 i智慧金牌系統", layout="wide", page_icon="🦁")
 
 @st.cache_resource
 def init_gemini():
-    if "GEMINI_API_KEY" not in st.secrets:
-        st.error("❌ 找不到 API 金鑰。請在 Streamlit Secrets 設定 GEMINI_API_KEY")
+    # 確保從 Secrets 讀取
+    api_key = st.secrets.get("GEMINI_API_KEY")
+    if not api_key:
+        st.error("❌ 找不到 API 金鑰。請檢查 Streamlit 的 Secrets 設定。")
         return None
     
-    # 【關鍵修復】配置 API 金鑰
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    
-    # 建立系統指令
-    instruction = """
-    你現在是「樂福團隊」的【i智慧金牌教練】。
-    你精通永慶聯賣系統與大數據分析。
-    你的任務：產出精準的房產戰略，並協助經紀人撰寫高質感的「聯賣推廣訊息」。
-    語氣：專業、激勵、充滿系統化的洞察力。
-    """
+    # 配置 API
+    genai.configure(api_key=api_key)
     
     try:
-        # 【關鍵修復】直接使用模型名稱字串，不加 'models/' 前綴，這能避開 v1beta 的路徑錯誤
+        # 【解決 404 的關鍵】: 
+        # 不要使用 models/ 前綴，也不要指定任何 api_version。
+        # 直接指定 'gemini-1.5-flash' 作為模型名稱。
         model = genai.GenerativeModel(
-            model_name='gemini-1.5-flash', 
-            system_instruction=instruction
+            model_name='gemini-1.5-flash',
+            system_instruction="你現在是樂福團隊的i智慧金牌教練，專精房產開發與聯賣策略。"
         )
+        
+        # 進行一個微型的連線測試，確保模型真的可用
+        model.generate_content("test")
         return model
     except Exception as e:
-        st.error(f"系統啟動失敗，請聯繫開發人員。錯誤：{e}")
-        return None
+        # 如果還是 404，嘗試備用方案：使用 'gemini-pro'
+        try:
+            return genai.GenerativeModel(model_name='gemini-pro')
+        except:
+            st.error(f"API 呼叫失敗，請確認 API 金鑰是否為最新的 PRO 權限。錯誤細節：{e}")
+            return None
 
 model = init_gemini()
 
-# --- 2. 行政區資料 (簡化顯示) ---
-TAIWAN_DATA = {"台中市": ["大里區", "北屯區", "西屯區", "南屯區", "太平區"], "台北市": ["中正區", "大安區", "信義區"], "新北市": ["板橋區", "中和區", "永和區"]} # 這裡可自行補全
-
-# --- 3. 介面設計 ---
+# --- 2. 介面設計 (保持原有專業排版) ---
 st.title("🦁 樂福 x i智慧：金牌聯賣戰略系統")
 
-# 輸入區域
 with st.container():
-    c1, c2, c3 = st.columns([2,2,2])
-    with c1: sel_city = st.selectbox("📍 縣市", options=list(TAIWAN_DATA.keys()))
-    with c2: sel_dist = st.selectbox("📍 區域", options=TAIWAN_DATA.get(sel_city, ["請選擇"]))
-    with c3: c_name = st.text_input("案名/社區", placeholder="例如：大附中別墅")
+    col1, col2 = st.columns(2)
+    with col1:
+        sel_city = st.selectbox("📍 選擇縣市", ["台中市", "台北市", "新北市"])
+        c_name = st.text_input("案名/社區")
+    with col2:
+        sel_dist = st.text_input("📍 區域 (例如：大里區)")
+        c_agent = st.text_input("執行經紀人姓名")
 
-    r1, r2, r3, r4 = st.columns(4)
-    with r1: c_build = st.text_input("總建坪")
-    with r2: c_age = st.text_input("屋齡")
-    with r3: c_price = st.text_input("開價(萬)")
-    with r4: c_agent = st.text_input("經紀人姓名")
+    st.divider()
+    s1, s2, s3 = st.columns(3)
+    with s1: c_build = st.text_input("總建坪")
+    with s2: c_age = st.text_input("屋齡")
+    with s3: c_price = st.text_input("開價(萬)")
 
-    submitted = st.button("🚀 啟動金牌戰略分析")
+    submitted = st.button("🚀 啟動聯賣戰略分析")
 
-# --- 4. 核心邏輯與聯賣文案生成 ---
+# --- 3. 核心運作邏輯 ---
 if submitted:
-    if model:
-        with st.spinner("🎯 正在與聯賣系統同步並請教金牌教練..."):
+    if not model:
+        st.error("系統模型載入失敗，請檢查 API Key 設定。")
+    else:
+        with st.spinner("🎯 正在同步聯賣數據與教練戰術..."):
             try:
-                # 準備 Prompt
+                # 建立戰略 Prompt
                 prompt = f"""
-                執行人：{c_agent}
+                經紀人：{c_agent}
                 物件：{sel_city}{sel_dist} - {c_name}
                 數據：屋齡{c_age}年 / 總建{c_build}坪 / 開價{c_price}萬。
-
-                請提供：
-                1.【聯賣戰略】：這間房子在聯賣體系中要如何跟友店合作最快成交？
-                2.【開發建議】：如何用數據說服屋主？
-                3.【Line 聯賣群組推廣文案】：請寫一段極具吸引力、讓友店看了想配件的簡短文案，包含社區亮點與您的聯絡資訊。
+                
+                請產出：
+                1.【聯賣攻略】：如何在永慶聯賣體系中吸引其他店組配件？
+                2.【開發金句】：用誠實房價數據說服屋主的重點。
+                3.【Line 聯賣推廣文案】：包含吸睛標題與物件重點。
                 """
                 
-                # 呼叫 API
                 response = model.generate_content(prompt)
+                st.markdown(response.text)
                 
-                if response:
-                    st.success("✅ 分析報告與聯賣文案已生成！")
-                    st.markdown(response.text)
-                    
-                    # 互動功能
-                    st.divider()
-                    st.subheader("📋 聯賣一鍵行動")
-                    st.info("您可以直接複製上方的【Line 聯賣群組推廣文案】發送到您的聯賣群組！")
-                    
+                st.success("✅ 教練戰略已傳達！")
+                
             except Exception as e:
-                st.error(f"偵測到 API 設定問題：{e}")
-                st.info("💡 提示：這通常是因為 API Key 沒有設定好，或是 Google 伺服器暫時繁忙。")
+                st.error(f"發生錯誤：{e}")
+                st.info("💡 提示：若持續出現 404，請登入 Google AI Studio 檢查您的 API Key 是否已啟用 Gemini 1.5 系列的存取權。")
