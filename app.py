@@ -1,12 +1,12 @@
 import streamlit as st
 import google.generativeai as genai
 
-# --- 1. 全台 368 鄉鎮市區資料庫 (絕對完整) ---
+# --- 1. 全台完整行政區資料庫 (絕不刪減) ---
 TAIWAN_DATA = {
+    "台中市": ["中區", "東區", "南區", "西區", "北區", "北屯區", "西屯區", "南屯區", "太平區", "大里區", "霧峰區", "烏日區", "豐原區", "后里區", "石岡區", "東勢區", "新社區", "潭子區", "大雅區", "神岡區", "大肚區", "沙鹿區", "龍井區", "梧棲區", "清水區", "大甲區", "外埔區", "大安區", "和平區"],
     "台北市": ["中正區", "大同區", "中山區", "松山區", "大安區", "萬華區", "信義區", "士林區", "北投區", "內湖區", "南港區", "文山區"],
     "新北市": ["板橋區", "三重區", "中和區", "永和區", "新莊區", "新店區", "樹林區", "鶯歌區", "三峽區", "淡水區", "汐止區", "土城區", "蘆洲區", "五股區", "泰山區", "林口區", "深坑區", "石碇區", "坪林區", "三芝區", "石門區", "八里區", "平溪區", "雙溪區", "貢寮區", "金山區", "萬里區", "烏來區"],
     "桃園市": ["桃園區", "中壢區", "大溪區", "楊梅區", "蘆竹區", "大園區", "龜山區", "八德區", "龍潭區", "平鎮區", "新屋區", "觀音區", "復興區"],
-    "台中市": ["中區", "東區", "南區", "西區", "北區", "北屯區", "西屯區", "南屯區", "太平區", "大里區", "霧峰區", "烏日區", "豐原區", "后里區", "石岡區", "東勢區", "新社區", "潭子區", "大雅區", "神岡區", "大肚區", "沙鹿區", "龍井區", "梧棲區", "清水區", "大甲區", "外埔區", "大安區", "和平區"],
     "台南市": ["中西區", "東區", "南區", "北區", "安平區", "安南區", "永康區", "歸仁區", "新化區", "左鎮區", "玉井區", "楠西區", "南化區", "仁德區", "關廟區", "龍崎區", "官田區", "麻豆區", "佳里區", "西港區", "七股區", "將軍區", "學甲區", "北門區", "新營區", "後壁區", "白河區", "東山區", "六甲區", "下營區", "柳營區", "鹽水區", "善化區", "大內區", "山上區", "新市區", "安定區"],
     "高雄市": ["新興區", "前金區", "苓雅區", "鹽埕區", "鼓山區", "旗津區", "前鎮區", "三民區", "楠梓區", "小港區", "左營區", "仁武區", "大社區", "岡山區", "路竹區", "阿蓮區", "田寮區", "燕巢區", "橋頭區", "梓官區", "彌陀區", "永安區", "湖內區", "鳳山區", "大寮區", "林園區", "鳥松區", "大樹區", "旗山區", "美濃區", "六龜區", "內門區", "杉林區", "甲仙區", "桃源區", "那瑪夏區", "茂林區", "茄萣區"],
     "基隆市": ["仁愛區", "信義區", "中正區", "中山區", "安樂區", "暖暖區", "七堵區"],
@@ -27,8 +27,8 @@ TAIWAN_DATA = {
     "連江縣": ["南竿鄉", "北竿鄉", "莒光鄉", "東引鄉"]
 }
 
-# --- 2. 核心初始化 (自動偵測可用路徑，徹底避開 404) ---
-st.set_page_config(page_title="樂福集團：全台金牌偵察系統", layout="wide", page_icon="🦅")
+# --- 2. 核心初始化 (自動修復 404 機制) ---
+st.set_page_config(page_title="樂福集團：精準門牌偵察系統", layout="wide", page_icon="🦅")
 
 @st.cache_resource
 def get_model():
@@ -37,59 +37,47 @@ def get_model():
         st.error("❌ 找不到 API 金鑰。")
         return None
     genai.configure(api_key=api_key)
-    
     try:
-        # 【自動偵測機制】: 找出目前帳號真正能用的模型完整路徑
+        # 動態列舉可用模型，確保不發生 404
         models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        
-        # 優先順序：1.5-flash -> 1.0-pro
-        selected_model = ""
-        if 'models/gemini-1.5-flash' in models:
-            selected_model = 'models/gemini-1.5-flash'
-        elif 'models/gemini-pro' in models:
-            selected_model = 'models/gemini-pro'
-        else:
-            selected_model = models[0] if models else ""
-
-        if not selected_model:
-            st.error("此 API Key 無可用模型。")
-            return None
-
-        return genai.GenerativeModel(
-            model_name=selected_model,
-            system_instruction="你現在是【樂福集團】金牌教練。你對全台地段與坪數極其專業，語氣犀利且霸氣。"
-        )
+        target = 'models/gemini-1.5-flash' if 'models/gemini-1.5-flash' in models else models[0]
+        return genai.GenerativeModel(model_name=target, system_instruction="你現在是樂福集團金牌教練。")
     except Exception as e:
-        st.error(f"連線失敗，請確認 API 金鑰是否正確。錯誤：{e}")
+        st.error(f"連線失敗：{e}")
         return None
 
 model = get_model()
 
-# --- 3. 介面設計 ---
-st.title("🦅 樂福集團：全台金牌偵察作戰系統")
+# --- 3. 介面設計 (門牌格式重組) ---
+st.title("🦅 樂福集團：金牌偵察作戰系統")
 st.markdown("---")
 
-# 完整地址區域
-st.subheader("📍 1. 詳細物件地址")
-a1, a2, a3 = st.columns([2, 2, 4])
-with a1: sel_city = st.selectbox("縣市", options=list(TAIWAN_DATA.keys()), index=3)
-with a2: sel_dist = st.selectbox("區域", options=TAIWAN_DATA[sel_city])
-with a3: road_name = st.text_input("路街名", placeholder="例如：崇德路")
+# 1. 地址連動區 (第一行)
+st.subheader("📍 1. 精確物件地址")
+c1, c2, c3 = st.columns([2, 2, 4])
+with c1:
+    sel_city = st.selectbox("縣市", options=list(TAIWAN_DATA.keys()), index=3) # 預設台中
+with c2:
+    sel_dist = st.selectbox("區域", options=TAIWAN_DATA[sel_city])
+with c3:
+    road_name = st.text_input("路街名", placeholder="例如：崇德路")
 
-# 巷弄弄號樓完整格式
-b1, b2, b3, b4, b5, b6 = st.columns([1, 1, 1, 1, 1, 2])
-with b1: addr_lane = st.text_input("巷")
-with b2: addr_alley = st.text_input("弄")
-with b3: addr_sub = st.text_input("衖")
-with b4: addr_sec = st.text_input("段")
-with b5: addr_num = st.text_input("號")
-with b6: addr_floor = st.text_input("樓層")
+# 2. 門牌細項區 (第二行，嚴格排序)
+st.markdown("##### 門牌細節說明")
+d1, d2, d3, d4, d5, d6 = st.columns([1, 1, 1, 1, 1, 2])
+with d1: addr_lane = st.text_input("巷")
+with d2: addr_alley = st.text_input("弄")
+with d3: addr_sub = st.text_input("衖")
+with d4: addr_sec = st.text_input("段")
+with d5: addr_num = st.text_input("號")
+with d6: addr_floor = st.text_input("樓層 (例如：15樓之1)")
 
+# 3. 其他資訊進入表單
 with st.form("love_pro_master_form"):
     c_name = st.text_input("🏠 案名/社區名稱")
     st.divider()
 
-    # 坪數細項：空白自由輸入框
+    # 4. 坪數自由輸入區 (純空白框)
     st.subheader("📏 2. 建物坪數拆解 (空白自由輸入)")
     p1, p2, p3, p4 = st.columns(4)
     with p1:
@@ -106,8 +94,8 @@ with st.form("love_pro_master_form"):
         c_price = st.text_input("💰 總開價")
 
     st.divider()
-
-    # 專業指標
+    
+    # 5. 戰術指標
     f1, f2, f3 = st.columns(3)
     with f1:
         c_age = st.text_input("📅 屋齡")
@@ -121,17 +109,20 @@ with st.form("love_pro_master_form"):
 
     submitted = st.form_submit_button("🔥 啟動樂福金牌深度分析")
 
-# --- 4. 分析報告 ---
+# --- 4. 執行邏輯 ---
 if submitted:
     if not model:
-        st.error("API 未啟動。")
+        st.error("API 故障中。")
     else:
-        full_addr = f"{sel_city}{sel_dist}{road_name}{addr_lane}巷{addr_alley}弄{addr_sub}衖{addr_sec}段{addr_num}號{addr_floor}"
-        with st.spinner("🎯 正在精算中..."):
+        # 組合精準門牌地址
+        full_addr = f"{sel_city}{sel_dist}{road_name}{addr_lane+'巷' if addr_lane else ''}{addr_alley+'弄' if addr_alley else ''}{addr_sub+'衖' if addr_sub else ''}{addr_sec+'段' if addr_sec else ''}{addr_num+'號' if addr_num else ''}{addr_floor}"
+        
+        with st.spinner("🎯 教練正在分析門牌價值..."):
             try:
-                prompt = f"經紀人：{c_agent} (樂福集團)。地址：{full_addr}。總建：{c_total}。主附公：{c_main}/{c_sub}/{c_public}。請以金牌教練身分給予深度戰略。"
+                prompt = f"經紀人：{c_agent} (樂福集團)。地址：{full_addr}。案名：{c_name}。總建：{c_total}。主建物：{c_main}。請以金牌教練身分給予深度戰術。"
                 response = model.generate_content(prompt)
                 st.markdown(f"### 📋 {c_agent} 專屬報告")
+                st.success(f"📍 分析目標：{full_addr}")
                 st.markdown(response.text)
             except Exception as e:
                 st.error(f"分析失敗：{e}")
