@@ -1,6 +1,5 @@
 import streamlit as st
 import google.generativeai as genai
-import streamlit.components.v1 as components
 import urllib.parse
 
 # --- 1. 全台完整行政區與郵遞區號資料庫 ---
@@ -40,20 +39,7 @@ st.markdown("""
     .section-title { color: #334155; border-left: 5px solid #1e3a8a; padding-left: 15px; margin-top: 30px; margin-bottom: 15px; font-weight: bold; font-size: 1.25rem; }
     .ai-box { background-color: #f0f9ff; padding: 15px; border-radius: 8px; border-left: 5px solid #0ea5e9; margin-bottom: 20px; }
     .map-container { border: 2px solid #1e3a8a; border-radius: 10px; overflow: hidden; margin-top: 10px; margin-bottom: 20px;}
-    
-    /* 街景按鈕 */
-    .street-view-btn {
-        display: block;
-        width: 100%;
-        text-align: center;
-        background-color: #FFC107;
-        color: #000;
-        font-weight: bold;
-        padding: 10px;
-        text-decoration: none;
-        border-radius: 5px;
-        margin-top: 5px;
-    }
+    .street-view-btn { display: block; width: 100%; text-align: center; background-color: #FFC107; color: #000; font-weight: bold; padding: 10px; text-decoration: none; border-radius: 5px; margin-top: 5px; }
     .street-view-btn:hover { background-color: #ffb300; }
     </style>
     """, unsafe_allow_html=True)
@@ -68,12 +54,10 @@ def get_model():
         target = 'models/gemini-1.5-flash' if 'models/gemini-1.5-flash' in models else models[0]
         instruction = """
         你現在是樂福集團的【金牌房產戰略教練】。
-        你的核心能力是：【自動行情偵查】與【數據戰略分析】。
-        
         任務：
-        1. 根據輸入的社區與地段，回溯你知識庫中的成交行情。
-        2. 將「本案開價」vs「AI偵查行情」vs「樂福內建估值」做三角比對。
-        3. 產出精準的議價策略。
+        1. 自動偵查該社區/地段的成交行情 (檢索知識庫)。
+        2. 將「本案開價」vs「AI偵查行情」vs「內建估值」做三角比對。
+        3. 產出議價與銷售戰略。
         """
         return genai.GenerativeModel(model_name=target, system_instruction=instruction)
     except: return None
@@ -84,7 +68,6 @@ model = get_model()
 st.title("🦅 HOUSE MANAGER")
 st.caption("鼎泰一不動產經紀有限公司 · 樂福集團 | AI 實景戰情版")
 
-# === A. 門牌資訊與即時地圖 ===
 st.markdown('<div class="section-title">📍 物件位置與實景</div>', unsafe_allow_html=True)
 
 col_map_L, col_map_R = st.columns([1, 1])
@@ -95,53 +78,41 @@ with col_map_L:
     with c1: sel_city = st.selectbox("城市 *", options=list(POSTAL_DATA.keys()), index=0)
     with c2: sel_dist = st.selectbox("鄉/鎮/市/區 *", options=list(POSTAL_DATA[sel_city].keys()))
     
-    # 郵遞區號
-    p_code = POSTAL_DATA[sel_city][sel_dist]
-    
     # 路名
-    road_name = st.text_input("路/街 (輸入後地圖連動) *", placeholder="例如：文心路四段")
+    road_name = st.text_input("路/街 (輸入後地圖連動) *", placeholder="例如：崇德路二段")
     
-    # 詳細門牌
-    r1, r2 = st.columns(2)
-    with r1: addr_lane = st.text_input("巷")
-    with r2: addr_alley = st.text_input("弄")
+    # --- 【新增】 段/巷/弄 (地圖連動關鍵) ---
+    r_detail_1, r_detail_2, r_detail_3 = st.columns(3)
+    with r_detail_1: addr_sec = st.text_input("段")
+    with r_detail_2: addr_lane = st.text_input("巷")
+    with r_detail_3: addr_alley = st.text_input("弄")
     
-    r3, r4 = st.columns(2)
-    with r3: addr_num = st.text_input("號")
-    with r4: addr_floor = st.text_input("樓")
+    # 號/樓
+    r_num_1, r_num_2 = st.columns(2)
+    with r_num_1: addr_num = st.text_input("號")
+    with r_num_2: addr_floor = st.text_input("樓")
     
     c_name = st.text_input("🏢 案名/社區名稱", placeholder="利於 AI 辨識行情")
 
-# 組合地圖用地址
+# 組合地圖用地址 (包含段/巷/弄/號)
 map_addr = f"{sel_city}{sel_dist}{road_name}"
+if addr_sec: map_addr += f"{addr_sec}段"
+if addr_lane: map_addr += f"{addr_lane}巷"
+if addr_alley: map_addr += f"{addr_alley}弄"
 if addr_num: map_addr += f"{addr_num}號"
 
 with col_map_R:
-    # 嵌入 Google Map
     if road_name:
         q_url = urllib.parse.quote(map_addr)
-        # 地圖 iframe
         st.markdown(f"""
         <div class="map-container">
-            <iframe 
-                width="100%" 
-                height="300" 
-                frameborder="0" 
-                style="border:0" 
-                src="https://maps.google.com/maps?q={q_url}&output=embed" 
-                allowfullscreen>
-            </iframe>
+            <iframe width="100%" height="300" frameborder="0" style="border:0" 
+            src="https://maps.google.com/maps?q={q_url}&output=embed" allowfullscreen></iframe>
         </div>
-        """, unsafe_allow_html=True)
-        
-        # 720度街景按鈕 (開啟 App)
-        st.markdown(f"""
-        <a href="https://www.google.com/maps/search/?api=1&query={q_url}" target="_blank" class="street-view-btn">
-           👀 開啟 720° 現場實景 (Street View)
-        </a>
+        <a href="https://www.google.com/maps/search/?api=1&query={q_url}" target="_blank" class="street-view-btn">👀 開啟 720° 現場實景</a>
         """, unsafe_allow_html=True)
     else:
-        st.info("👈 請在左側輸入路名，地圖將自動定位。")
+        st.info("👈 請輸入路名以顯示地圖")
 
 # === B. 規格與自動分析區 ===
 with st.form("auto_market_form"):
@@ -168,42 +139,29 @@ with st.form("auto_market_form"):
     with f2: c_face = st.selectbox("🧭 朝向", ["座北朝南", "座南朝北", "座東朝西", "座西朝東", "其他"])
     with f3: c_agent = st.text_input("👤 樂福戰鬥員姓名")
 
-    # 提示
-    st.markdown("""
-    <div class="ai-box">
-    🤖 <b>AI 自動戰情室</b><br>
-    系統將自動抓取該地段行情，與開價、內建估值進行三方比對，產出作戰報告。
-    </div>
-    """, unsafe_allow_html=True)
-
+    st.markdown("""<div class="ai-box">🤖 <b>AI 自動戰情室</b><br>系統將自動抓取行情並進行三方比對。</div>""", unsafe_allow_html=True)
     submitted = st.form_submit_button("🔥 啟動 AI 行情偵查 & 戰略報告")
 
 # --- 4. 執行與分析 ---
 if submitted:
     if model:
-        full_addr = f"{sel_city}{sel_dist}{road_name}{addr_lane+'巷' if addr_lane else ''}{addr_alley+'弄' if addr_alley else ''}{addr_num+'號' if addr_num else ''}{addr_floor+'樓' if addr_floor else ''}"
+        # 完整地址用於 AI 分析
+        full_addr = map_addr + (f"{addr_floor}樓" if addr_floor else "")
         
         with st.spinner(f"🔍 AI 正在掃描 {c_name if c_name else road_name} 周邊行情..."):
             try:
                 prompt = f"""
-                經紀人：{c_agent} (樂福集團)。
-                物件：{full_addr} ({c_name})。
-                屋齡：{c_age}年。
-                
-                【本案數據】：
+                經紀人：{c_agent} (樂福集團)。物件：{full_addr} ({c_name})。
                 開價：{c_price}萬 / 總坪：{c_total} / 主+附：{c_main}+{c_sub}。
                 樂福內建估值：{internal_val} 萬。
-                合作狀況：{coop_status}。
                 
-                【任務指令】：
-                1. (AI 自動偵查)：請回溯知識庫，列出該區域/社區的「預估成交均價」與「近期成交區間」。
-                2. (戰情比對)：將「AI 偵查行情」vs「本案開價」vs「內建估值」做三角比對。
-                3. (戰略生成)：給出議價策略與銷售亮點。
+                任務：
+                1. 回溯該地段/社區行情。
+                2. 比較 開價 vs AI行情 vs 內建估值。
+                3. 產出議價策略。
                 """
                 response = model.generate_content(prompt)
-                
                 st.info(f"📍 偵查對象：{full_addr}")
                 st.markdown(response.text)
-                
             except Exception as e:
                 st.error(f"分析失敗：{e}")
