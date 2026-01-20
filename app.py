@@ -1,8 +1,8 @@
 import streamlit as st
 import google.generativeai as genai
+import urllib.parse
 
-# --- 1. 全台完整行政區與郵遞區號資料庫 (絕不刪減) ---
-# 格式: {縣市: {區域: 郵遞區號}}
+# --- 1. 全台完整行政區與郵遞區號資料庫 ---
 POSTAL_DATA = {
     "臺中市": {"中區": "400", "東區": "401", "南區": "402", "西區": "403", "北區": "404", "北屯區": "406", "西屯區": "407", "南屯區": "408", "太平區": "411", "大里區": "412", "霧峰區": "413", "烏日區": "414", "豐原區": "420", "后里區": "421", "石岡區": "422", "東勢區": "423", "新社區": "424", "潭子區": "427", "大雅區": "428", "神岡區": "429", "大肚區": "432", "沙鹿區": "433", "龍井區": "434", "梧棲區": "435", "清水區": "436", "大甲區": "437", "外埔區": "438", "大安區": "439", "和平區": "426"},
     "臺北市": {"中正區": "100", "大同區": "103", "中山區": "104", "松山區": "105", "大安區": "106", "萬華區": "108", "信義區": "110", "士林區": "111", "北投區": "112", "內湖區": "114", "南港區": "115", "文山區": "116"},
@@ -29,14 +29,30 @@ POSTAL_DATA = {
 }
 
 # --- 2. 核心初始化 ---
-st.set_page_config(page_title="樂福集團 HOUSE MANAGER PRO", layout="wide", page_icon="🦅")
+st.set_page_config(page_title="樂福集團 HOUSE MANAGER", layout="wide", page_icon="🦅")
 
-# 高質感底線風格 CSS
+# CSS: 高質感底線風格 + 連結按鈕優化
 st.markdown("""
     <style>
     .stTextInput>div>div>input, .stSelectbox>div>div>div { background-color: transparent; border: none; border-bottom: 2px solid #1e3a8a; border-radius: 0px; padding: 5px 0px; }
     h1 { color: #1e3a8a; font-family: 'Noto Sans TC', sans-serif; font-weight: 800; }
-    .section-title { color: #334155; border-left: 5px solid #1e3a8a; padding-left: 15px; margin-top: 25px; margin-bottom: 15px; font-weight: bold; font-size: 1.2rem; }
+    .section-title { color: #334155; border-left: 5px solid #1e3a8a; padding-left: 15px; margin-top: 30px; margin-bottom: 15px; font-weight: bold; font-size: 1.25rem; }
+    .market-box { background-color: #f8fafc; padding: 20px; border-radius: 10px; border: 1px solid #e2e8f0; }
+    
+    /* 連結按鈕樣式 */
+    .link-btn {
+        display: inline-block;
+        padding: 5px 15px;
+        margin: 5px;
+        background-color: #e2e8f0;
+        color: #1e3a8a;
+        text-decoration: none;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        font-weight: bold;
+        transition: 0.3s;
+    }
+    .link-btn:hover { background-color: #1e3a8a; color: white; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -46,31 +62,35 @@ def get_model():
     if not api_key: return None
     genai.configure(api_key=api_key)
     try:
-        available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        target = 'models/gemini-1.5-flash' if 'models/gemini-1.5-flash' in available_models else available_models[0]
-        return genai.GenerativeModel(model_name=target, system_instruction="你現在是樂福集團的高級房產戰略顧問，語氣專業、尊貴、精準。")
+        models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+        target = 'models/gemini-1.5-flash' if 'models/gemini-1.5-flash' in models else models[0]
+        instruction = """
+        你現在是樂福集團的【金牌房產戰略教練】。
+        你的任務是：
+        1. 比較「本案開價」與「各大平台一年內成交行情」及「樂福內建估值」。
+        2. 分析價格偏離度。
+        3. 制定「合作與聯賣方向」：是要主打低總價吸客，還是主打稀有性？
+        4. 語氣：專業、數據導向、霸氣。
+        """
+        return genai.GenerativeModel(model_name=target, system_instruction=instruction)
     except: return None
 
 model = get_model()
 
 # --- 3. 介面設計 ---
 st.title("🦅 HOUSE MANAGER")
-st.caption("鼎泰一不動產經紀有限公司 · 樂福集團")
+st.caption("鼎泰一不動產經紀有限公司 · 樂福集團 | 全網戰情中心")
 
+# === A. 門牌資訊 ===
 st.markdown('<div class="section-title">📍 物件門牌資訊</div>', unsafe_allow_html=True)
 
-# 地址連動邏輯
 c1, c2, c3 = st.columns([1.5, 2, 2])
-with c1:
-    sel_city = st.selectbox("城市 *", options=list(POSTAL_DATA.keys()), index=0)
-with c2:
-    sel_dist = st.selectbox("鄉/鎮/市/區 *", options=list(POSTAL_DATA[sel_city].keys()))
+with c1: sel_city = st.selectbox("城市 *", options=list(POSTAL_DATA.keys()), index=0)
+with c2: sel_dist = st.selectbox("鄉/鎮/市/區 *", options=list(POSTAL_DATA[sel_city].keys()))
 with c3:
-    # 自動換算郵遞區號
     p_code = POSTAL_DATA[sel_city][sel_dist]
     post_code = st.text_input("郵遞區號 (自動)", value=p_code, disabled=True)
 
-# 門牌細節排版
 r1_1, r1_2, r1_3 = st.columns(3)
 with r1_1: addr_village = st.text_input("村/里")
 with r1_2: addr_neighbor = st.text_input("鄰")
@@ -91,13 +111,24 @@ with r4_1: addr_floor = st.text_input("樓")
 with r4_2: addr_floor_post = st.text_input("之 (樓後)")
 with r4_3: addr_room = st.text_input("室")
 
-# --- 第二區塊：規格與分析 ---
-st.markdown('<div class="section-title">📏 物件實戰規格</div>', unsafe_allow_html=True)
+# === B. 規格與市場分析 ===
 with st.form("pro_analysis_form"):
-    c_name = st.text_input("🏢 案名/社區名稱")
+    st.markdown('<div class="section-title">📏 物件規格</div>', unsafe_allow_html=True)
+    c_name = st.text_input("🏢 案名/社區名稱 (填寫以生成搜尋連結)")
     
-    # 坪數自由輸入 (維持空白框)
-    st.markdown("##### 📐 坪數明細 (空白自由輸入)")
+    # 搜尋連結生成區 (關鍵新功能)
+    if c_name and sel_city:
+        q_str = urllib.parse.quote(f"{sel_city}{sel_dist} {c_name} 實價登錄")
+        leju_q = urllib.parse.quote(f"{c_name}")
+        st.markdown(f"""
+        <div style="margin-bottom: 15px;">
+            <span style="font-size: 0.9rem; color: #666;">🔍 外部行情一鍵偵查 (各大平台)：</span><br>
+            <a href="https://www.leju.com.tw/community?keyword={leju_q}" target="_blank" class="link-btn">🏠 樂居 Leju</a>
+            <a href="https://market.591.com.tw/list?keywords={q_str}" target="_blank" class="link-btn">🔢 591 實價</a>
+            <a href="https://google.com/search?q={q_str}" target="_blank" class="link-btn">🌍 Google 全網搜</a>
+        </div>
+        """, unsafe_allow_html=True)
+
     p1, p2, p3 = st.columns(3)
     with p1: c_main = st.text_input("🏠 主建物坪數")
     with p2: c_sub = st.text_input("➕ 附屬建物")
@@ -106,19 +137,41 @@ with st.form("pro_analysis_form"):
     p4, p5, p6 = st.columns(3)
     with p4: c_total = st.text_input("📊 權狀總坪數")
     with p5: c_land = st.text_input("🌱 持分地坪")
-    with p6: c_price = st.text_input("💰 總開價 (萬)")
+    with p6: c_price = st.text_input("💰 本案開價 (萬)")
 
+    # === C. 市場行情與內建資料 ===
+    st.markdown('<div class="section-title">📉 市場行情與內建資料 (請填入上方偵查結果)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="market-box">', unsafe_allow_html=True)
+    
+    m1, m2, m3 = st.columns(3)
+    with m1: 
+        m_avg_price = st.text_input("📊 區域/社區成交均價 (萬/坪)", placeholder="參考各大平台數據")
+    with m2: 
+        m_recent_deal = st.text_input("🔥 一年內最近成交價 (萬)", placeholder="參考最新一筆")
+    with m3: 
+        internal_val = st.text_input("🔒 樂福內建估值 (萬)", placeholder="公司內部鑑價")
+
+    m4, m5 = st.columns(2)
+    with m4: 
+        market_trend = st.selectbox("📈 區域市場趨勢", ["量縮價平", "量增價漲", "量大價跌", "有行無市", "惜售缺案"])
+    with m5:
+        coop_strategy = st.text_input("🤝 友店/合作狀況", placeholder="例如：庫存多、專任獨賣...")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # 其他細節
+    st.markdown('<div class="section-title">💡 其他細節</div>', unsafe_allow_html=True)
     f1, f2, f3 = st.columns(3)
     with f1: c_age = st.text_input("📅 屋齡")
     with f2: c_face = st.selectbox("🧭 朝向", ["座北朝南", "座南朝北", "座東朝西", "座西朝東", "其他"])
     with f3: c_agent = st.text_input("👤 樂福戰鬥員姓名")
 
-    submitted = st.form_submit_button("🚀 啟動專業實戰顧問報告")
+    submitted = st.form_submit_button("🔥 啟動金牌戰略：全網行情對比")
 
 # --- 4. 執行與分析 ---
 if submitted:
     if model:
-        # 組合門牌
+        # 地址組合
         addr_parts = [sel_city, sel_dist, addr_village, addr_neighbor, road_name, 
                       f"{addr_sec}段" if addr_sec else "", 
                       f"{addr_lane}巷" if addr_lane else "", 
@@ -131,11 +184,31 @@ if submitted:
                       addr_room]
         full_addr = "".join([p for p in addr_parts if p])
         
-        with st.spinner("🎯 顧問正在精算數據戰術..."):
+        with st.spinner("🎯 教練正在比對內建檔與全網行情..."):
             try:
-                prompt = f"經紀人：{c_agent}。地址：{full_addr}。坪數拆解：主{c_main}/附{c_sub}/公{c_public}。開價：{c_price}萬。請提供深度作戰分析報告。"
+                prompt = f"""
+                經紀人：{c_agent} (樂福集團)。
+                物件：{full_addr} ({c_name})
+                
+                【本案數據】：
+                開價：{c_price}萬 / 總坪：{c_total} / 主+附：{c_main}+{c_sub}。
+                
+                【全網行情與內建對比 (一年內)】：
+                1. 平台均價：{m_avg_price} (萬/坪)
+                2. 最近成交：{m_recent_deal} 萬
+                3. 樂福內建估值：{internal_val} 萬
+                4. 市場趨勢：{market_trend} / 合作狀況：{coop_strategy}
+                
+                請進行以下分析：
+                1. 【全網價格光譜】：比較「各大平台行情」與「樂福內建估值」，定位本案開價的合理性。
+                2. 【精準議價點】：若開價高於平台均價，請提供數據支撐的談判話術。
+                3. 【聯賣合作戰略】：基於友店與市場狀況，制定推案策略。
+                4. 【樂福戰術總結】：給經紀人的一句話行動指令。
+                """
                 response = model.generate_content(prompt)
-                st.info(f"📍 分析門牌：{full_addr} (郵遞區號：{p_code})")
+                
+                st.info(f"📍 分析對象：{full_addr} | 郵遞區號：{p_code}")
                 st.markdown(response.text)
+                
             except Exception as e:
                 st.error(f"分析失敗：{e}")
