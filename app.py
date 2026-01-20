@@ -1,8 +1,9 @@
 import streamlit as st
 import google.generativeai as genai
 import urllib.parse
+import json
 
-# --- 1. 全台完整行政區與郵遞區號資料庫 ---
+# --- 1. 全台完整行政區與郵遞區號資料庫 (資料核心) ---
 POSTAL_DATA = {
     "臺中市": {"中區": "400", "東區": "401", "南區": "402", "西區": "403", "北區": "404", "北屯區": "406", "西屯區": "407", "南屯區": "408", "太平區": "411", "大里區": "412", "霧峰區": "413", "烏日區": "414", "豐原區": "420", "后里區": "421", "石岡區": "422", "東勢區": "423", "新社區": "424", "潭子區": "427", "大雅區": "428", "神岡區": "429", "大肚區": "432", "沙鹿區": "433", "龍井區": "434", "梧棲區": "435", "清水區": "436", "大甲區": "437", "外埔區": "438", "大安區": "439", "和平區": "426"},
     "臺北市": {"中正區": "100", "大同區": "103", "中山區": "104", "松山區": "105", "大安區": "106", "萬華區": "108", "信義區": "110", "士林區": "111", "北投區": "112", "內湖區": "114", "南港區": "115", "文山區": "116"},
@@ -28,19 +29,30 @@ POSTAL_DATA = {
     "連江縣": {"南竿鄉": "209", "北竿鄉": "210", "莒光鄉": "211", "東引鄉": "212"}
 }
 
-# --- 2. 核心初始化 ---
-st.set_page_config(page_title="樂福集團 HOUSE MANAGER PRO", layout="wide", page_icon="🦅")
+# --- 2. 系統設定與快取管理 ---
+st.set_page_config(page_title="樂福集團 HOUSE MANAGER AI", layout="wide", page_icon="🦅")
 
-# CSS: 高質感底線風格 + 地圖框
+# 初始化 Session State (用於存儲解析後的地址)
+if 'addr_data' not in st.session_state:
+    st.session_state.addr_data = {
+        "city": "", "dist": "", "road": "", "sec": "", 
+        "lane": "", "alley": "", "no": "", "floor": ""
+    }
+
+# CSS: 專業質感風格 (仿 House Manager)
 st.markdown("""
     <style>
     .stTextInput>div>div>input, .stSelectbox>div>div>div { background-color: transparent; border: none; border-bottom: 2px solid #1e3a8a; border-radius: 0px; padding: 5px 0px; }
     h1 { color: #1e3a8a; font-family: 'Noto Sans TC', sans-serif; font-weight: 800; }
     .section-title { color: #334155; border-left: 5px solid #1e3a8a; padding-left: 15px; margin-top: 30px; margin-bottom: 15px; font-weight: bold; font-size: 1.25rem; }
-    .ai-box { background-color: #f0f9ff; padding: 15px; border-radius: 8px; border-left: 5px solid #0ea5e9; margin-bottom: 20px; }
-    .map-container { border: 2px solid #1e3a8a; border-radius: 10px; overflow: hidden; margin-top: 10px; margin-bottom: 20px;}
-    .street-view-btn { display: block; width: 100%; text-align: center; background-color: #FFC107; color: #000; font-weight: bold; padding: 10px; text-decoration: none; border-radius: 5px; margin-top: 5px; }
-    .street-view-btn:hover { background-color: #ffb300; }
+    .ai-parser-box { background-color: #e0f2fe; padding: 20px; border-radius: 10px; border: 2px dashed #0284c7; margin-bottom: 20px; }
+    .map-container { border: 2px solid #1e3a8a; border-radius: 10px; overflow: hidden; margin-top: 10px; margin-bottom: 10px; }
+    .action-btn { display: inline-block; width: 100%; text-align: center; padding: 8px; margin: 3px 0; border-radius: 5px; text-decoration: none; color: white; font-weight: bold; transition: 0.3s; }
+    .btn-leju { background-color: #5F9EA0; }
+    .btn-591 { background-color: #FF8C00; }
+    .btn-google { background-color: #4682B4; }
+    .btn-street { background-color: #FFC107; color: black; }
+    .action-btn:hover { opacity: 0.9; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -54,10 +66,11 @@ def get_model():
         target = 'models/gemini-1.5-flash' if 'models/gemini-1.5-flash' in models else models[0]
         instruction = """
         你現在是樂福集團的【金牌房產戰略教練】。
+        核心能力：自動化行情偵查、地址解析、戰略比對。
         任務：
-        1. 自動偵查該社區/地段的成交行情 (檢索知識庫)。
-        2. 將「本案開價」vs「AI偵查行情」vs「內建估值」做三角比對。
-        3. 產出議價與銷售戰略。
+        1. 接收經紀人輸入的物件與內建估值。
+        2. 若有社區名稱，請回溯你的知識庫提供該社區近期行情。
+        3. 將開價 vs 行情 vs 內建估值 進行三角比對，產出專業的議價或銷售策略。
         """
         return genai.GenerativeModel(model_name=target, system_instruction=instruction)
     except: return None
@@ -66,102 +79,164 @@ model = get_model()
 
 # --- 3. 介面設計 ---
 st.title("🦅 HOUSE MANAGER")
-st.caption("鼎泰一不動產經紀有限公司 · 樂福集團 | AI 實景戰情版")
+st.caption("鼎泰一不動產經紀有限公司 · 樂福集團 | AI 智能全能版")
 
+# === A. ⚡ 智能地址快搜 (One-Click Parsing) ===
+st.markdown('<div class="ai-parser-box">', unsafe_allow_html=True)
+st.subheader("⚡ 智能地址快搜 (貼上整串地址，AI 自動填表)")
+c_parse_1, c_parse_2 = st.columns([5, 1])
+with c_parse_1:
+    raw_addr_input = st.text_input("輸入範例：台中市北屯區松竹路一段100巷5號12樓", key="raw_addr")
+with c_parse_2:
+    st.write("") # Spacer
+    do_parse = st.button("🔍 AI 解析", type="primary", use_container_width=True)
+
+if do_parse and raw_addr_input and model:
+    with st.spinner("AI 正在拆解門牌..."):
+        try:
+            prompt = f"""
+            將此地址拆解為JSON (若無該欄位則留空):
+            地址: {raw_addr_input}
+            欄位: city(縣市), dist(區), road(路街), sec(段), lane(巷), alley(弄), no(號), floor(樓)
+            只回傳JSON。
+            """
+            resp = model.generate_content(prompt)
+            parsed = json.loads(resp.text.replace('```json','').replace('```',''))
+            st.session_state.addr_data.update(parsed) # 更新 Session State
+            st.success("✅ 解析完成！已填入下方表格")
+        except:
+            st.error("解析失敗，請手動輸入")
+st.markdown('</div>', unsafe_allow_html=True)
+
+# === B. 詳細門牌與地圖連動 (Map View) ===
 st.markdown('<div class="section-title">📍 物件位置與實景</div>', unsafe_allow_html=True)
 
-col_map_L, col_map_R = st.columns([1, 1])
+col_L, col_R = st.columns([1, 1])
 
-with col_map_L:
-    # 地址輸入區
-    c1, c2 = st.columns([1, 1])
-    with c1: sel_city = st.selectbox("城市 *", options=list(POSTAL_DATA.keys()), index=0)
-    with c2: sel_dist = st.selectbox("鄉/鎮/市/區 *", options=list(POSTAL_DATA[sel_city].keys()))
-    
-    # 路名
-    road_name = st.text_input("路/街 (輸入後地圖連動) *", placeholder="例如：崇德路二段")
-    
-    # --- 【新增】 段/巷/弄 (地圖連動關鍵) ---
-    r_detail_1, r_detail_2, r_detail_3 = st.columns(3)
-    with r_detail_1: addr_sec = st.text_input("段")
-    with r_detail_2: addr_lane = st.text_input("巷")
-    with r_detail_3: addr_alley = st.text_input("弄")
-    
-    # 號/樓
-    r_num_1, r_num_2 = st.columns(2)
-    with r_num_1: addr_num = st.text_input("號")
-    with r_num_2: addr_floor = st.text_input("樓")
-    
-    c_name = st.text_input("🏢 案名/社區名稱", placeholder="利於 AI 辨識行情")
+with col_L:
+    # 使用 Session State 的值作為預設值
+    c1, c2 = st.columns(2)
+    with c1: 
+        # 為了支援解析後的自動填入，這裡使用 text_input 接收 session_state，
+        # 如果需要下拉選單，可以透過 index 邏輯處理，但 text_input 最直觀能顯示 AI 解析結果
+        current_city = st.session_state.addr_data.get("city", "")
+        # 如果解析出的城市在資料庫中，嘗試用 Selectbox，否則用 Text (增加彈性)
+        if current_city in POSTAL_DATA:
+            sel_city = st.selectbox("城市 *", options=list(POSTAL_DATA.keys()), index=list(POSTAL_DATA.keys()).index(current_city))
+        else:
+            sel_city = st.selectbox("城市 *", options=list(POSTAL_DATA.keys()), index=0)
 
-# 組合地圖用地址 (包含段/巷/弄/號)
+    with c2:
+        current_dist = st.session_state.addr_data.get("dist", "")
+        dist_opts = list(POSTAL_DATA[sel_city].keys())
+        # 嘗試自動對應區域
+        idx_dist = 0
+        if current_dist in dist_opts:
+            idx_dist = dist_opts.index(current_dist)
+        sel_dist = st.selectbox("鄉/鎮/市/區 *", options=dist_opts, index=idx_dist)
+
+    # 郵遞區號自動換算
+    p_code = POSTAL_DATA[sel_city][sel_dist]
+    st.caption(f"📮 郵遞區號：{p_code}")
+
+    # 門牌詳情 (Value 綁定 Session State)
+    r1, r2 = st.columns([2, 1])
+    with r1: road_name = st.text_input("路/街名 *", value=st.session_state.addr_data.get("road", ""))
+    with r2: addr_sec = st.text_input("段", value=st.session_state.addr_data.get("sec", ""))
+
+    r3, r4, r5 = st.columns(3)
+    with r3: addr_lane = st.text_input("巷", value=st.session_state.addr_data.get("lane", ""))
+    with r4: addr_alley = st.text_input("弄", value=st.session_state.addr_data.get("alley", ""))
+    with r5: addr_num = st.text_input("號", value=st.session_state.addr_data.get("no", ""))
+    
+    addr_floor = st.text_input("樓層", value=st.session_state.addr_data.get("floor", ""))
+
+# 組合地圖地址
 map_addr = f"{sel_city}{sel_dist}{road_name}"
 if addr_sec: map_addr += f"{addr_sec}段"
 if addr_lane: map_addr += f"{addr_lane}巷"
 if addr_alley: map_addr += f"{addr_alley}弄"
 if addr_num: map_addr += f"{addr_num}號"
 
-with col_map_R:
+with col_R:
     if road_name:
         q_url = urllib.parse.quote(map_addr)
         st.markdown(f"""
         <div class="map-container">
-            <iframe width="100%" height="300" frameborder="0" style="border:0" 
+            <iframe width="100%" height="320" frameborder="0" style="border:0" 
             src="https://maps.google.com/maps?q={q_url}&output=embed" allowfullscreen></iframe>
         </div>
-        <a href="https://www.google.com/maps/search/?api=1&query={q_url}" target="_blank" class="street-view-btn">👀 開啟 720° 現場實景</a>
         """, unsafe_allow_html=True)
+        # 實景按鈕
+        st.markdown(f'<a href="https://www.google.com/maps/search/?api=1&query={q_url}" target="_blank" class="action-btn btn-street">👀 開啟 720° 現場實景 (Street View)</a>', unsafe_allow_html=True)
     else:
         st.info("👈 請輸入路名以顯示地圖")
 
-# === B. 規格與自動分析區 ===
-with st.form("auto_market_form"):
-    st.markdown('<div class="section-title">📏 物件規格與內建檔</div>', unsafe_allow_html=True)
+# === C. 戰情室：規格、行情偵查、內建估值 ===
+st.markdown('<div class="section-title">📉 戰情室 (規格 & 市場比對)</div>', unsafe_allow_html=True)
+
+with st.form("battle_room_form"):
+    c_name = st.text_input("🏢 案名/社區名稱 (輸入後生成外部偵查連結)")
     
+    # 外部偵查按鈕生成 (Leju / 591)
+    if c_name:
+        leju_q = urllib.parse.quote(c_name)
+        q_591 = urllib.parse.quote(f"{sel_city}{sel_dist} {c_name}")
+        st.markdown("🔍 **外部火力偵查 (點擊開啟)**：")
+        b1, b2, b3 = st.columns(3)
+        with b1: st.markdown(f'<a href="https://www.leju.com.tw/community?keyword={leju_q}" target="_blank" class="action-btn btn-leju">🏠 樂居實價</a>', unsafe_allow_html=True)
+        with b2: st.markdown(f'<a href="https://market.591.com.tw/list?keywords={q_591}" target="_blank" class="action-btn btn-591">🔢 591 行情</a>', unsafe_allow_html=True)
+        with b3: st.markdown(f'<a href="https://www.google.com/search?q={q_591}" target="_blank" class="action-btn btn-google">🌍 Google 全搜</a>', unsafe_allow_html=True)
+
+    st.markdown("---")
+    # 規格 (空白自由輸入)
     p1, p2, p3 = st.columns(3)
-    with p1: c_main = st.text_input("🏠 主建物坪數")
+    with p1: c_main = st.text_input("🏠 主建物")
     with p2: c_sub = st.text_input("➕ 附屬建物")
     with p3: c_public = st.text_input("🏢 公設坪數")
 
-    p4, p5, p6 = st.columns(3)
-    with p4: c_total = st.text_input("📊 權狀總坪數")
+    p4, p5 = st.columns(2)
+    with p4: c_total = st.text_input("📊 權狀總坪")
     with p5: c_land = st.text_input("🌱 持分地坪")
-    with p6: c_price = st.text_input("💰 本案開價 (萬)")
 
-    st.markdown("##### 🔒 內部機密數據")
-    i1, i2 = st.columns(2)
-    with i1: internal_val = st.text_input("樂福內建估值 (萬)", placeholder="公司鑑價")
-    with i2: coop_status = st.text_input("合作狀況", placeholder="例如：專任、友店庫存多")
+    st.markdown("##### 💰 價格戰略 (核心比對區)")
+    # 這裡讓 AI 自動去抓行情填入，但保留手動修正空間
+    price_cols = st.columns(3)
+    with price_cols[0]: c_price = st.text_input("本案開價 (萬)")
+    with price_cols[1]: internal_val = st.text_input("🔒 樂福內建估值 (萬)")
+    with price_cols[2]: coop_status = st.text_input("合作狀況 (如: 專任)")
+    
+    other_cols = st.columns(3)
+    with other_cols[0]: c_age = st.text_input("屋齡")
+    with other_cols[1]: c_face = st.text_input("朝向")
+    with other_cols[2]: c_agent = st.text_input("經紀人姓名")
 
-    st.markdown("---")
-    f1, f2, f3 = st.columns(3)
-    with f1: c_age = st.text_input("📅 屋齡")
-    with f2: c_face = st.selectbox("🧭 朝向", ["座北朝南", "座南朝北", "座東朝西", "座西朝東", "其他"])
-    with f3: c_agent = st.text_input("👤 樂福戰鬥員姓名")
+    submitted = st.form_submit_button("🔥 啟動金牌教練戰略分析")
 
-    st.markdown("""<div class="ai-box">🤖 <b>AI 自動戰情室</b><br>系統將自動抓取行情並進行三方比對。</div>""", unsafe_allow_html=True)
-    submitted = st.form_submit_button("🔥 啟動 AI 行情偵查 & 戰略報告")
-
-# --- 4. 執行與分析 ---
+# --- 4. AI 分析邏輯 ---
 if submitted:
     if model:
-        # 完整地址用於 AI 分析
-        full_addr = map_addr + (f"{addr_floor}樓" if addr_floor else "")
-        
-        with st.spinner(f"🔍 AI 正在掃描 {c_name if c_name else road_name} 周邊行情..."):
+        full_addr_str = map_addr + (f"{addr_floor}樓" if addr_floor else "")
+        with st.spinner("🦁 金牌教練正在進行三方價格比對與戰略推演..."):
             try:
                 prompt = f"""
-                經紀人：{c_agent} (樂福集團)。物件：{full_addr} ({c_name})。
+                經紀人：{c_agent} (樂福集團)。
+                物件：{full_addr_str} ({c_name})。
+                屋齡：{c_age}。
+                
+                【戰略數據】：
                 開價：{c_price}萬 / 總坪：{c_total} / 主+附：{c_main}+{c_sub}。
                 樂福內建估值：{internal_val} 萬。
+                合作狀況：{coop_status}。
                 
-                任務：
-                1. 回溯該地段/社區行情。
-                2. 比較 開價 vs AI行情 vs 內建估值。
-                3. 產出議價策略。
+                【任務】：
+                1. (AI 自動偵查)：請依據你的知識庫，列出該社區/路段的「近期成交行情區間」。
+                2. (價格光譜)：製作一個比對表 [開價] vs [AI 偵查行情] vs [內建估值]。
+                3. (戰略生成)：計算價差，並產出針對屋主的「議價話術」與針對買方的「銷售亮點」。
+                4. (聯賣建議)：基於合作狀況，給予聯賣策略。
                 """
                 response = model.generate_content(prompt)
-                st.info(f"📍 偵查對象：{full_addr}")
+                st.info(f"📍 分析目標：{full_addr_str}")
                 st.markdown(response.text)
             except Exception as e:
-                st.error(f"分析失敗：{e}")
+                st.error(f"分析中斷：{e}")
