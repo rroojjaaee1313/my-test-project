@@ -4,7 +4,8 @@ import urllib.parse
 import json
 import datetime
 
-# --- 1. 資料庫與設定 ---
+# --- 1. 全台完整行政區與郵遞區號資料庫 ---
+# 為了避免複製錯誤，請確保此字典完整閉合
 POSTAL_DATA = {
     "臺中市": {"中區": "400", "東區": "401", "南區": "402", "西區": "403", "北區": "404", "北屯區": "406", "西屯區": "407", "南屯區": "408", "太平區": "411", "大里區": "412", "霧峰區": "413", "烏日區": "414", "豐原區": "420", "后里區": "421", "石岡區": "422", "東勢區": "423", "新社區": "424", "潭子區": "427", "大雅區": "428", "神岡區": "429", "大肚區": "432", "沙鹿區": "433", "龍井區": "434", "梧棲區": "435", "清水區": "436", "大甲區": "437", "外埔區": "438", "大安區": "439", "和平區": "426"},
     "臺北市": {"中正區": "100", "大同區": "103", "中山區": "104", "松山區": "105", "大安區": "106", "萬華區": "108", "信義區": "110", "士林區": "111", "北投區": "112", "內湖區": "114", "南港區": "115", "文山區": "116"},
@@ -40,15 +41,15 @@ if 'addr_data' not in st.session_state:
         "lane": "", "alley": "", "no": "", "floor": ""
     }
 
-# 【新增】歷史紀錄與對話紀錄
+# 歷史紀錄與對話紀錄
 if 'history' not in st.session_state:
-    st.session_state.history = [] # 儲存過去的報告
+    st.session_state.history = []
 if 'chat_history' not in st.session_state:
-    st.session_state.chat_history = [] # 儲存與教練的對話
+    st.session_state.chat_history = []
 if 'current_report' not in st.session_state:
-    st.session_state.current_report = "" # 當前正在討論的報告
+    st.session_state.current_report = ""
 
-# CSS
+# CSS: 專業底線風格 + 功能按鈕優化
 st.markdown("""
     <style>
     .stTextInput>div>div>input, .stSelectbox>div>div>div { background-color: transparent; border: none; border-bottom: 2px solid #1e3a8a; border-radius: 0px; padding: 5px 0px; }
@@ -56,6 +57,8 @@ st.markdown("""
     .section-title { color: #334155; border-left: 5px solid #1e3a8a; padding-left: 15px; margin-top: 30px; margin-bottom: 15px; font-weight: bold; font-size: 1.25rem; }
     .ai-parser-box { background-color: #e0f2fe; padding: 20px; border-radius: 10px; border: 2px dashed #0284c7; margin-bottom: 20px; }
     .map-container { border: 2px solid #1e3a8a; border-radius: 10px; overflow: hidden; margin-top: 10px; margin-bottom: 10px; }
+    
+    /* 按鈕 */
     .action-btn { display: inline-block; width: 100%; text-align: center; padding: 8px; margin: 3px 0; border-radius: 5px; text-decoration: none; color: white; font-weight: bold; transition: 0.3s; font-size: 0.9rem;}
     .btn-leju { background-color: #5F9EA0; }
     .btn-591 { background-color: #FF8C00; }
@@ -98,7 +101,7 @@ with st.sidebar:
             btn_label = f"{record['time']} - {record['addr'][:6]}..."
             if st.button(btn_label, key=f"hist_{i}"):
                 st.session_state.current_report = record['report']
-                # 強制刷新聊天紀錄，讓使用者針對舊報告提問
+                # 強制刷新聊天紀錄
                 st.session_state.chat_history = [] 
                 st.info(f"已載入歷史報告：{record['addr']}")
     else:
