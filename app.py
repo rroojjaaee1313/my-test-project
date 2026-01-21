@@ -12,23 +12,40 @@ POSTAL_DATA = {
     "桃園市": {"桃園區": "330", "中壢區": "320", "大溪區": "335", "楊梅區": "326", "蘆竹區": "338", "大園區": "337", "龜山區": "333", "八德區": "334", "龍潭區": "325", "平鎮區": "324", "新屋區": "327", "觀音區": "328", "復興區": "336"},
     "臺南市": {"中西區": "700", "東區": "701", "南區": "702", "北區": "704", "安平區": "708", "安南區": "709", "永康區": "710", "歸仁區": "711", "新化區": "712", "左鎮區": "713", "玉井區": "714", "楠西區": "715", "南化區": "716", "仁德區": "717", "關廟區": "718", "龍崎區": "719", "官田區": "720", "麻豆區": "721", "佳里區": "722", "西港區": "723", "七股區": "724", "將軍區": "725", "學甲區": "726", "北門區": "727", "新營區": "730", "後壁區": "731", "白河區": "732", "東山區": "733", "六甲區": "734", "下營區": "735", "柳營區": "736", "鹽水區": "737", "善化區": "741", "大內區": "742", "山上區": "743", "新市區": "744", "安定區": "745"},
     "高雄市": {"新興區": "800", "前金區": "801", "苓雅區": "802", "鹽埕區": "803", "鼓山區": "804", "旗津區": "805", "前鎮區": "806", "三民區": "807", "楠梓區": "808", "小港區": "812", "左營區": "813", "仁武區": "814", "大社區": "815", "岡山區": "820", "路竹區": "821", "阿蓮區": "822", "田寮區": "823", "燕巢區": "824", "橋頭區": "825", "梓官區": "826", "彌陀區": "827", "永安區": "828", "湖內區": "829", "鳳山區": "830", "大寮區": "831", "林園區": "832", "鳥松區": "833", "大樹區": "834", "旗山區": "840", "美濃區": "842", "六龜區": "844", "內門區": "845", "杉林區": "846", "甲仙區": "847", "桃源區": "848", "那瑪夏區": "849", "茂林區": "851", "茄萣區": "852"},
-    # ... 其他縣市省略，程式碼長度考量
+    "基隆市": {"仁愛區": "200", "信義區": "201", "中正區": "202", "中山區": "203", "安樂區": "204", "暖暖區": "205", "七堵區": "206"},
+    "新竹市": {"東區": "300", "北區": "300", "香山區": "300"},
+    "新竹縣": {"竹北市": "302", "竹東鎮": "310", "新埔鎮": "305", "關西鎮": "306", "湖口鄉": "303", "新豐鄉": "304", "芎林鄉": "307", "橫山鄉": "312", "北埔鄉": "314", "寶山鄉": "308", "峨眉鄉": "315", "尖石鄉": "313", "五峰鄉": "311"},
+    "苗栗縣": {"苗栗市": "360", "頭份市": "351", "竹南鎮": "350", "後龍鎮": "356", "通霄鎮": "357", "苑裡鎮": "358", "卓蘭鎮": "369", "造橋鄉": "361", "西湖鄉": "368", "頭屋鄉": "362", "公館鄉": "363", "銅鑼鄉": "366", "三義鄉": "367", "大湖鄉": "364", "獅潭鄉": "354", "三灣鄉": "352", "南庄鄉": "353", "泰安鄉": "365"},
+    "彰化縣": {"彰化市": "500", "員林市": "510", "鹿港鎮": "505", "和美鎮": "508", "北斗鎮": "521", "溪湖鎮": "514", "田中鎮": "520", "二林鎮": "526", "線西鄉": "507", "伸港鄉": "509", "福興鄉": "506", "秀水鄉": "504", "花壇鄉": "503", "芬園鄉": "502", "大村鄉": "515", "埔鹽鄉": "516", "埔心鄉": "513", "永靖鄉": "512", "社頭鄉": "511", "二水鄉": "530", "田尾鄉": "522", "埤頭鄉": "523", "芳苑鄉": "528", "大城鄉": "527", "竹塘鄉": "525", "溪州鄉": "524"},
+    "南投縣": {"南投市": "540", "埔里鎮": "545", "草屯鎮": "542", "竹山鎮": "557", "集集鎮": "552", "名間鄉": "551", "鹿谷鄉": "558", "中寮鄉": "541", "魚池鄉": "555", "國姓鄉": "544", "水里鄉": "553", "信義鄉": "556", "仁愛鄉": "546"},
+    "雲林縣": {"斗六市": "640", "斗南鎮": "630", "虎尾鎮": "632", "西螺鎮": "648", "土庫鎮": "633", "北港鎮": "651", "古坑鄉": "646", "大埤鄉": "631", "莿桐鄉": "647", "林內鄉": "643", "二崙鄉": "649", "崙背鄉": "637", "麥寮鄉": "638", "東勢鄉": "635", "褒忠鄉": "634", "台西鄉": "636", "元長鄉": "655", "四湖鄉": "654", "口湖鄉": "653", "水林鄉": "652"},
+    "嘉義市": {"東區": "600", "西區": "600"},
+    "嘉義縣": {"太保市": "612", "朴子市": "613", "布袋鎮": "625", "大林鎮": "622", "民雄鄉": "621", "溪口鄉": "623", "新港鄉": "616", "六腳鄉": "615", "東石鄉": "614", "義竹鄉": "624", "鹿草鄉": "611", "水上鄉": "608", "中埔鄉": "606", "竹崎鄉": "604", "梅山鄉": "603", "番路鄉": "602", "大埔鄉": "607", "阿里山鄉": "605"},
+    "屏東縣": {"屏東市": "900", "潮州鎮": "920", "東港鎮": "928", "恆春鎮": "946", "萬丹鄉": "913", "長治鄉": "908", "麟洛鄉": "909", "九如鄉": "904", "里港鄉": "905", "高樹鄉": "906", "鹽埔鄉": "907", "內埔鄉": "912", "竹田鄉": "911", "萬巒鄉": "923", "枋寮鄉": "940", "新埤鄉": "925", "枋山鄉": "941", "車城鄉": "944", "滿州鄉": "947", "三地門鄉": "901", "霧臺鄉": "902", "瑪家鄉": "903", "泰武鄉": "921", "來義鄉": "922", "春日鄉": "942", "獅子鄉": "943", "牡丹鄉": "945", "琉球鄉": "929", "崁頂鄉": "924", "南州鄉": "926", "佳冬鄉": "927"},
+    "宜蘭縣": {"宜蘭市": "260", "羅東鎮": "265", "蘇澳鎮": "270", "頭城鎮": "261", "礁溪鄉": "262", "壯圍鄉": "263", "員山鄉": "264", "冬山鄉": "269", "五結鄉": "268", "三星鄉": "266", "大同鄉": "267", "南澳鄉": "272"},
+    "花蓮縣": {"花蓮市": "970", "鳳林鎮": "975", "玉里鎮": "981", "新城鄉": "971", "吉安鄉": "973", "壽豐鄉": "974", "光復鄉": "976", "豐濱鄉": "977", "瑞穗鄉": "978", "富里鄉": "983", "秀林鄉": "972", "萬榮鄉": "979", "卓溪鄉": "982"},
+    "台東縣": {"台東市": "950", "成功鎮": "961", "關山鎮": "962", "卑南鄉": "954", "鹿野鄉": "955", "池上鄉": "956", "東河鄉": "959", "長濱鄉": "962", "太麻里鄉": "963", "大武鄉": "965", "綠島鄉": "951", "海端鄉": "957", "延平鄉": "953", "金峰鄉": "964", "達仁鄉": "966", "蘭嶼鄉": "952"},
+    "澎湖縣": {"馬公市": "880", "湖西鄉": "885", "白沙鄉": "884", "西嶼鄉": "881", "望安鄉": "882", "七美鄉": "883"},
+    "金門縣": {"金城鎮": "893", "金湖鎮": "891", "金沙鎮": "890", "金寧鄉": "892", "烈嶼鄉": "894", "烏坵鄉": "896"},
+    "連江縣": {"南竿鄉": "209", "北竿鄉": "210", "莒光鄉": "211", "東引鄉": "212"}
 }
 
-# --- 2. 系統初始化 ---
+# --- 2. 系統設定與歷史狀態 ---
 st.set_page_config(page_title="樂福集團 HOUSE MANAGER AI", layout="wide", page_icon="🦅")
 
-# 初始化 Session State (記憶體)
 if 'addr_data' not in st.session_state:
-    st.session_state.addr_data = {"city": "", "dist": "", "road": "", "sec": "", "lane": "", "alley": "", "no": "", "floor": ""}
+    st.session_state.addr_data = {
+        "city": "", "dist": "", "road": "", "sec": "", 
+        "lane": "", "alley": "", "no": "", "floor": ""
+    }
 if 'history' not in st.session_state:
     st.session_state.history = []
 if 'chat_history' not in st.session_state:
     st.session_state.chat_history = []
 if 'current_report' not in st.session_state:
-    st.session_state.current_report = "" # 這裡存著 AI 的「內建估值」智慧
+    st.session_state.current_report = ""
 
-# CSS
+# CSS: 專業底線風格
 st.markdown("""
     <style>
     .stTextInput>div>div>input, .stSelectbox>div>div>div { background-color: transparent; border: none; border-bottom: 2px solid #1e3a8a; border-radius: 0px; padding: 5px 0px; }
@@ -36,16 +53,15 @@ st.markdown("""
     .section-title { color: #334155; border-left: 5px solid #1e3a8a; padding-left: 15px; margin-top: 30px; margin-bottom: 15px; font-weight: bold; font-size: 1.25rem; }
     .ai-parser-box { background-color: #e0f2fe; padding: 20px; border-radius: 10px; border: 2px dashed #0284c7; margin-bottom: 20px; }
     .map-container { border: 2px solid #1e3a8a; border-radius: 10px; overflow: hidden; margin-top: 10px; margin-bottom: 10px; }
+    
+    /* 按鈕樣式 */
     .action-btn { display: inline-block; width: 100%; text-align: center; padding: 8px; margin: 3px 0; border-radius: 5px; text-decoration: none; color: white; font-weight: bold; transition: 0.3s; font-size: 0.9rem;}
     .btn-leju { background-color: #5F9EA0; }
     .btn-591 { background-color: #FF8C00; }
     .btn-google { background-color: #4682B4; }
     .btn-street { background-color: #FFC107; color: black; }
-    .btn-life { background-color: #64748b; color: white; }
     .action-btn:hover { opacity: 0.9; }
-    
-    /* 對話框優化 */
-    .stChatMessage { border-radius: 10px; padding: 10px; margin-bottom: 10px; }
+    .chat-container { border: 1px solid #ddd; padding: 15px; border-radius: 10px; margin-top: 20px; background: #fafafa; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -57,81 +73,106 @@ def get_model():
     try:
         models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
         target = 'models/gemini-1.5-flash' if 'models/gemini-1.5-flash' in models else models[0]
-        return genai.GenerativeModel(model_name=target)
+        instruction = """
+        你現在是樂福集團的【金牌房產戰略教練】。
+        
+        【任務重點】：
+        1. 【絕對精準】：嚴禁使用「學區佳」、「機能好」等模糊廢話。
+        2. 【強制指名】：你必須根據地址，直接列出該物件的「學區國小」、「學區國中」、「最近市場/商圈」、「最近公園」。請展現你對地段的熟悉度。
+        3. 【攻防分析】：根據開價、內建估值、底價，進行精闢的三角分析。
+        4. 語氣：專業、數據導向、霸氣。
+        """
+        return genai.GenerativeModel(model_name=target, system_instruction=instruction)
     except: return None
 
 model = get_model()
 
 # --- 3. 側邊欄：歷史戰報 ---
 with st.sidebar:
-    st.title("📜 歷史戰報")
-    st.caption("點擊回顧過去的分析")
+    st.title("📜 歷史戰報紀錄")
+    st.caption("點擊按鈕載入舊報告")
     if st.session_state.history:
         for i, record in enumerate(reversed(st.session_state.history)):
             btn_label = f"{record['time']} - {record['addr'][:6]}..."
             if st.button(btn_label, key=f"hist_{i}"):
                 st.session_state.current_report = record['report']
-                st.session_state.chat_history = [] # 換新報告時，清空對話
+                st.session_state.chat_history = [] 
                 st.info(f"已載入：{record['addr']}")
     else:
-        st.write("尚無資料")
+        st.write("尚無生成紀錄")
 
-# --- 4. 主介面 ---
+# --- 4. 主介面設計 ---
 st.title("🦅 HOUSE MANAGER")
-st.caption("鼎泰一不動產經紀有限公司 · 樂福集團 | 互動戰情室")
+st.caption("鼎泰一不動產經紀有限公司 · 樂福集團")
 
 # 角色選擇
 role_mode = st.radio("⚔️ 您的戰鬥位置？", ["🛡️ 開發方 (維護/屋主端)", "🏹 銷售方 (買方/帶看端)"], horizontal=True)
 
-# A. 智能地址快搜
+# === A. ⚡ 智能地址快搜 ===
 st.markdown('<div class="ai-parser-box">', unsafe_allow_html=True)
-st.subheader("⚡ 智能地址快搜")
+st.subheader("⚡ 智能地址快搜 (貼上整串，AI 自動填表)")
 c_parse_1, c_parse_2 = st.columns([5, 1])
 with c_parse_1:
     raw_addr_input = st.text_input("輸入範例：台中市北屯區松竹路一段100巷5號12樓", key="raw_addr")
 with c_parse_2:
     st.write("") 
-    do_parse = st.button("🔍 解析", type="primary", use_container_width=True)
+    do_parse = st.button("🔍 AI 解析", type="primary", use_container_width=True)
 
 if do_parse and raw_addr_input and model:
-    with st.spinner("AI 拆解中..."):
+    with st.spinner("AI 正在拆解門牌..."):
         try:
-            prompt = f"將地址拆解為JSON (city, dist, road, sec, lane, alley, no, floor): {raw_addr_input}。只回傳JSON。"
+            prompt = f"""
+            將此地址拆解為JSON (若無該欄位則留空):
+            地址: {raw_addr_input}
+            欄位: city(縣市), dist(區), road(路街), sec(段), lane(巷), alley(弄), no(號), floor(樓)
+            只回傳JSON。
+            """
             resp = model.generate_content(prompt)
             parsed = json.loads(resp.text.replace('```json','').replace('```',''))
             st.session_state.addr_data.update(parsed)
-            st.success("✅ 解析成功")
+            st.success("✅ 解析完成！")
         except:
-            st.error("解析失敗")
+            st.error("解析失敗，請手動輸入")
 st.markdown('</div>', unsafe_allow_html=True)
 
-# B. 地址與地圖
-st.markdown('<div class="section-title">📍 物件位置</div>', unsafe_allow_html=True)
+# === B. 詳細門牌與地圖 ===
+st.markdown('<div class="section-title">📍 物件位置與實景</div>', unsafe_allow_html=True)
 col_L, col_R = st.columns([1, 1])
 
 with col_L:
     c1, c2 = st.columns(2)
     with c1: 
-        curr_city = st.session_state.addr_data.get("city", "")
-        sel_city = st.selectbox("城市", options=list(POSTAL_DATA.keys()), index=list(POSTAL_DATA.keys()).index(curr_city) if curr_city in POSTAL_DATA else 0)
-    with c2:
-        curr_dist = st.session_state.addr_data.get("dist", "")
-        opts = list(POSTAL_DATA[sel_city].keys())
-        sel_dist = st.selectbox("區域", options=opts, index=opts.index(curr_dist) if curr_dist in opts else 0)
+        current_city = st.session_state.addr_data.get("city", "")
+        if current_city in POSTAL_DATA:
+            sel_city = st.selectbox("城市 *", options=list(POSTAL_DATA.keys()), index=list(POSTAL_DATA.keys()).index(current_city))
+        else:
+            sel_city = st.selectbox("城市 *", options=list(POSTAL_DATA.keys()), index=0)
 
-    st.caption(f"📮 郵遞區號：{POSTAL_DATA[sel_city][sel_dist]}")
+    with c2:
+        current_dist = st.session_state.addr_data.get("dist", "")
+        dist_opts = list(POSTAL_DATA[sel_city].keys())
+        idx_dist = dist_opts.index(current_dist) if current_dist in dist_opts else 0
+        sel_dist = st.selectbox("鄉/鎮/市/區 *", options=dist_opts, index=idx_dist)
+
+    p_code = POSTAL_DATA[sel_city][sel_dist]
+    st.caption(f"📮 郵遞區號：{p_code}")
 
     r1, r2 = st.columns([2, 1])
-    with r1: road_name = st.text_input("路名", value=st.session_state.addr_data.get("road", ""))
+    with r1: road_name = st.text_input("路/街名 *", value=st.session_state.addr_data.get("road", ""))
     with r2: addr_sec = st.text_input("段", value=st.session_state.addr_data.get("sec", ""))
 
     r3, r4, r5 = st.columns(3)
     with r3: addr_lane = st.text_input("巷", value=st.session_state.addr_data.get("lane", ""))
     with r4: addr_alley = st.text_input("弄", value=st.session_state.addr_data.get("alley", ""))
     with r5: addr_num = st.text_input("號", value=st.session_state.addr_data.get("no", ""))
+    
     addr_floor = st.text_input("樓層", value=st.session_state.addr_data.get("floor", ""))
 
-map_addr = f"{sel_city}{sel_dist}{road_name}{addr_sec+'段' if addr_sec else ''}{addr_lane+'巷' if addr_lane else ''}{addr_alley+'弄' if addr_alley else ''}{addr_num+'號' if addr_num else ''}"
+map_addr = f"{sel_city}{sel_dist}{road_name}"
+if addr_sec: map_addr += f"{addr_sec}段"
+if addr_lane: map_addr += f"{addr_lane}巷"
+if addr_alley: map_addr += f"{addr_alley}弄"
+if addr_num: map_addr += f"{addr_num}號"
 full_addr_str = map_addr + (f"{addr_floor}樓" if addr_floor else "")
 
 with col_R:
@@ -143,114 +184,133 @@ with col_R:
             src="https://maps.google.com/maps?q={q_url}&output=embed" allowfullscreen></iframe>
         </div>
         """, unsafe_allow_html=True)
-        b1, b2, b3 = st.columns(3)
-        with b1: st.markdown(f'<a href="https://www.google.com/maps/search/?api=1&query={q_url}" target="_blank" class="action-btn btn-street">👀 720° 街景</a>', unsafe_allow_html=True)
-        with b2: st.markdown(f'<a href="https://www.google.com/maps/search/{urllib.parse.quote(map_addr+" 學校")}" target="_blank" class="action-btn btn-life">🏫 查學區</a>', unsafe_allow_html=True)
-        with b3: st.markdown(f'<a href="https://www.google.com/maps/search/{urllib.parse.quote(map_addr+" 市場")}" target="_blank" class="action-btn btn-life">🥦 查市場</a>', unsafe_allow_html=True)
+        
+        # 只保留街景按鈕
+        st.markdown(f'<a href="https://www.google.com/maps/search/?api=1&query={q_url}" target="_blank" class="action-btn btn-street">👀 720° 街景 (Street View)</a>', unsafe_allow_html=True)
     else:
-        st.info("👈 請輸入路名顯示地圖")
+        st.info("👈 請輸入地址顯示地圖")
 
-# C. 戰情室
-st.markdown('<div class="section-title">📉 戰情室</div>', unsafe_allow_html=True)
-with st.form("battle_form"):
-    c_name = st.text_input("🏢 案名/社區")
+# === C. 戰情室 ===
+st.markdown('<div class="section-title">📉 戰情室 (指名度與攻防)</div>', unsafe_allow_html=True)
+
+with st.form("battle_room_form"):
+    c_name = st.text_input("🏢 案名/社區名稱")
+    
     if c_name:
-        q_url = urllib.parse.quote(f"{sel_city}{sel_dist} {c_name}")
-        st.markdown(f'<a href="https://www.google.com/search?q={q_url}" target="_blank" class="action-btn btn-google">🌍 Google 全網搜</a>', unsafe_allow_html=True)
+        leju_q = urllib.parse.quote(c_name)
+        q_591 = urllib.parse.quote(f"{sel_city}{sel_dist} {c_name}")
+        st.markdown("🔍 **外部行情偵查**：")
+        b1, b2, b3 = st.columns(3)
+        with b1: st.markdown(f'<a href="https://www.leju.com.tw/community?keyword={leju_q}" target="_blank" class="action-btn btn-leju">🏠 樂居實價</a>', unsafe_allow_html=True)
+        with b2: st.markdown(f'<a href="https://market.591.com.tw/list?keywords={q_591}" target="_blank" class="action-btn btn-591">🔢 591 行情</a>', unsafe_allow_html=True)
+        with b3: st.markdown(f'<a href="https://www.google.com/search?q={q_591}" target="_blank" class="action-btn btn-google">🌍 Google 全搜</a>', unsafe_allow_html=True)
 
     st.markdown("---")
     p1, p2, p3 = st.columns(3)
     with p1: c_main = st.text_input("🏠 主建物")
-    with p2: c_sub = st.text_input("➕ 附屬")
-    with p3: c_public = st.text_input("🏢 公設")
+    with p2: c_sub = st.text_input("➕ 附屬建物")
+    with p3: c_public = st.text_input("🏢 公設坪數")
+
     p4, p5 = st.columns(2)
-    with p4: c_total = st.text_input("📊 總坪")
-    with p5: c_land = st.text_input("🌱 地坪")
+    with p4: c_total = st.text_input("📊 權狀總坪")
+    with p5: c_land = st.text_input("🌱 持分地坪")
 
-    st.markdown("##### 💰 價格與機密")
-    pr1, pr2, pr3 = st.columns(3)
-    with pr1: c_price = st.text_input("本案開價 (萬)")
-    with pr2: internal_val = st.text_input("🔒 樂福內建估值")
-    with pr3: coop_status = st.text_input("合作狀況")
+    st.markdown("##### 💰 價格戰略 (核心數據)")
+    price_cols = st.columns(3)
+    with price_cols[0]: c_price = st.text_input("本案開價 (萬)")
+    with price_cols[1]: internal_val = st.text_input("🔒 樂福內建估值 (萬)")
+    with price_cols[2]: coop_status = st.text_input("合作狀況")
     
-    sec1, sec2 = st.columns(2)
-    with sec1: owner_expect = st.text_input("屋主底價", placeholder="機密")
-    with sec2: past_offer = st.text_input("最高出價紀錄", placeholder="機密")
+    st.markdown("##### 🔐 談判機密檔案")
+    secret_c1, secret_c2 = st.columns(2)
+    with secret_c1:
+        owner_expect = st.text_input("屋主期望價格 (心中底價)", placeholder="選填")
+    with secret_c2:
+        past_offer = st.text_input("曾經出價紀錄 (下斡沒成)", placeholder="選填")
 
-    o1, o2, o3 = st.columns(3)
-    with o1: c_age = st.text_input("屋齡")
-    with o2: c_face = st.text_input("朝向")
-    with o3: c_agent = st.text_input("經紀人")
+    other_cols = st.columns(3)
+    with other_cols[0]: c_age = st.text_input("屋齡")
+    with other_cols[1]: c_face = st.text_input("朝向")
+    with other_cols[2]: c_agent = st.text_input("經紀人姓名")
 
-    btn_text = "🔥 啟動開發回報" if "開發" in role_mode else "🚀 啟動銷售戰略"
-    submitted = st.form_submit_button(btn_text)
+    btn_label = "🔥 啟動開發回報分析" if "開發" in role_mode else "🚀 啟動銷售戰略分析"
+    submitted = st.form_submit_button(btn_label)
 
-# --- 5. 生成報告 ---
-if submitted and model:
-    role_prompt = "針對屋主進行議價回報，找出降價理由。" if "開發" in role_mode else "針對買方進行銷售，放大優勢與稀有性。"
-    
-    with st.spinner("🦁 教練思考中..."):
-        try:
-            prompt = f"""
-            角色：樂福集團金牌教練 ({role_mode})。
-            目標：{role_prompt}
-            
-            物件：{full_addr_str} ({c_name})
-            開價：{c_price}萬 / 內建估值：{internal_val}萬。
-            屋主底價：{owner_expect} / 曾經出價：{past_offer}。
-            
-            任務：
-            1. (機能): 具體指出附近的學校、市場名稱。
-            2. (價格): 分析 開價 vs 估值 vs 底價 的差距。
-            3. (戰略): 給出具體話術。
-            """
-            resp = model.generate_content(prompt)
-            st.session_state.current_report = resp.text
-            
-            # 存入歷史
-            st.session_state.history.append({
-                "time": datetime.datetime.now().strftime("%H:%M"),
-                "addr": full_addr_str,
-                "report": resp.text
-            })
-            st.session_state.chat_history = [] # 新報告清空對話
-        except Exception as e:
-            st.error(f"錯誤：{e}")
+# --- 5. AI 生成邏輯 ---
+if submitted:
+    if model:
+        # 根據選擇的角色，注入不同的指令靈魂
+        role_instruction = ""
+        if "開發" in role_mode:
+            role_instruction = "你的身分：開發方(屋主端)教練。核心目標：【回報屋主、管理期望、議價降價】。"
+        else:
+            role_instruction = "你的身分：銷售方(買方端)教練。核心目標：【說服買方、消除抗性、促成出價】。"
 
-# --- 6. 報告與對話框 (核心新增) ---
+        with st.spinner(f"🦁 {role_mode}教練正在推演戰術..."):
+            try:
+                prompt = f"""
+                {role_instruction}
+                
+                經紀人：{c_agent} (樂福集團)。
+                物件地址：{full_addr_str} ({c_name})。
+                屋齡：{c_age}。
+                
+                【戰略數據】：
+                開價：{c_price}萬 / 總坪：{c_total} / 主+附：{c_main}+{c_sub}。
+                樂福內建估值：{internal_val} 萬。
+                
+                【談判機密】：
+                屋主期望(底價)：{owner_expect} 萬。
+                曾經最高出價(失敗)：{past_offer} 萬。
+                
+                【任務執行】：
+                1. (機能指名 - 務必具體)：直接列出「學區(國小/國中)」、「市場」、「公園」名稱。
+                2. (價格攻防)：根據你的角色(開發/銷售)，分析上述價格的關係。
+                3. (行動指令)：產出具體的對話策略或文案。
+                """
+                response = model.generate_content(prompt)
+                
+                st.session_state.current_report = response.text
+                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+                st.session_state.history.append({
+                    "time": timestamp,
+                    "addr": full_addr_str,
+                    "report": response.text
+                })
+                st.session_state.chat_history = []
+                
+            except Exception as e:
+                st.error(f"分析中斷：{e}")
+
+# --- 6. 報告與對話 ---
 if st.session_state.current_report:
     st.markdown("---")
     st.subheader(f"📋 {role_mode} 戰略報告")
-    st.info(f"📍 分析中：{full_addr_str}")
+    st.info(f"📍 分析物件：{full_addr_str}")
     st.markdown(st.session_state.current_report)
     
     st.markdown("---")
-    st.subheader("💬 戰情室對話 (針對本案追問)")
+    st.subheader("💬 與金牌教練對話 (針對本案追問)")
     
-    # 顯示對話歷史
     for msg in st.session_state.chat_history:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
-    
-    # 對話輸入區
-    if user_input := st.chat_input("例如：屋主如果說不急著賣怎麼辦？"):
-        # 1. 顯示 User 訊息
+            
+    if user_input := st.chat_input("向教練提問..."):
         with st.chat_message("user"):
             st.markdown(user_input)
         st.session_state.chat_history.append({"role": "user", "content": user_input})
         
-        # 2. AI 回答
         with st.chat_message("assistant"):
-            with st.spinner("教練推演中..."):
-                # 將「當前報告」作為背景知識傳給 AI
+            with st.spinner("教練思考中..."):
                 chat_prompt = f"""
-                背景報告：
+                目前報告內容：
                 {st.session_state.current_report}
                 
-                目前身分：{role_mode}
-                經紀人提問：{user_input}
+                當前角色：{role_mode}
+                使用者提問：{user_input}
                 
-                請根據報告內容與內建估值，給出具體戰術建議。
+                請基於角色立場回答。
                 """
                 chat_resp = model.generate_content(chat_prompt)
                 st.markdown(chat_resp.text)
