@@ -2,8 +2,9 @@ import streamlit as st
 import google.generativeai as genai
 import urllib.parse
 import json
+import datetime
 
-# --- 1. 全台完整行政區與郵遞區號資料庫 ---
+# --- 1. 資料庫與設定 ---
 POSTAL_DATA = {
     "臺中市": {"中區": "400", "東區": "401", "南區": "402", "西區": "403", "北區": "404", "北屯區": "406", "西屯區": "407", "南屯區": "408", "太平區": "411", "大里區": "412", "霧峰區": "413", "烏日區": "414", "豐原區": "420", "后里區": "421", "石岡區": "422", "東勢區": "423", "新社區": "424", "潭子區": "427", "大雅區": "428", "神岡區": "429", "大肚區": "432", "沙鹿區": "433", "龍井區": "434", "梧棲區": "435", "清水區": "436", "大甲區": "437", "外埔區": "438", "大安區": "439", "和平區": "426"},
     "臺北市": {"中正區": "100", "大同區": "103", "中山區": "104", "松山區": "105", "大安區": "106", "萬華區": "108", "信義區": "110", "士林區": "111", "北投區": "112", "內湖區": "114", "南港區": "115", "文山區": "116"},
@@ -29,14 +30,23 @@ POSTAL_DATA = {
     "連江縣": {"南竿鄉": "209", "北竿鄉": "210", "莒光鄉": "211", "東引鄉": "212"}
 }
 
-# --- 2. 系統設定 ---
+# --- 2. 系統設定與歷史狀態 ---
 st.set_page_config(page_title="樂福集團 HOUSE MANAGER AI", layout="wide", page_icon="🦅")
 
+# 初始化 Session State
 if 'addr_data' not in st.session_state:
     st.session_state.addr_data = {
         "city": "", "dist": "", "road": "", "sec": "", 
         "lane": "", "alley": "", "no": "", "floor": ""
     }
+
+# 【新增】歷史紀錄與對話紀錄
+if 'history' not in st.session_state:
+    st.session_state.history = [] # 儲存過去的報告
+if 'chat_history' not in st.session_state:
+    st.session_state.chat_history = [] # 儲存與教練的對話
+if 'current_report' not in st.session_state:
+    st.session_state.current_report = "" # 當前正在討論的報告
 
 # CSS
 st.markdown("""
@@ -46,8 +56,6 @@ st.markdown("""
     .section-title { color: #334155; border-left: 5px solid #1e3a8a; padding-left: 15px; margin-top: 30px; margin-bottom: 15px; font-weight: bold; font-size: 1.25rem; }
     .ai-parser-box { background-color: #e0f2fe; padding: 20px; border-radius: 10px; border: 2px dashed #0284c7; margin-bottom: 20px; }
     .map-container { border: 2px solid #1e3a8a; border-radius: 10px; overflow: hidden; margin-top: 10px; margin-bottom: 10px; }
-    
-    /* 按鈕 */
     .action-btn { display: inline-block; width: 100%; text-align: center; padding: 8px; margin: 3px 0; border-radius: 5px; text-decoration: none; color: white; font-weight: bold; transition: 0.3s; font-size: 0.9rem;}
     .btn-leju { background-color: #5F9EA0; }
     .btn-591 { background-color: #FF8C00; }
@@ -55,6 +63,8 @@ st.markdown("""
     .btn-street { background-color: #FFC107; color: black; }
     .btn-life { background-color: #64748b; color: white; }
     .action-btn:hover { opacity: 0.9; }
+    /* 聊天室樣式 */
+    .chat-container { border: 1px solid #ddd; padding: 15px; border-radius: 10px; margin-top: 20px; background: #fafafa; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -66,30 +76,41 @@ def get_model():
     try:
         models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
         target = 'models/gemini-1.5-flash' if 'models/gemini-1.5-flash' in models else models[0]
-        # 指令升級：加入「攻防策略」邏輯
         instruction = """
         你現在是樂福集團的【金牌房產戰略教練】。
-        
-        【任務重點】：
-        1. 嚴禁使用模糊字眼，必須具體指名學校、市場、公園名稱。
-        2. 【攻防策略核心】：你將獲得「開價」、「曾經出價紀錄(下斡沒成)」與「屋主期望底價」。
-           - 若 (曾經出價) < (內建估值) < (屋主期望)：分析差距，給出如何「向上管理屋主」的策略。
-           - 若 (曾經出價) 接近 (屋主期望)：分析成交關鍵點，給出臨門一腳的話術。
-           - 若 (開價) 遠高於 (市場行情)：給出「殺價與議價」的數據子彈。
-        3. 語氣：專業、數據導向、霸氣。
+        1. 嚴禁模糊字眼，具體指名學校、市場、公園。
+        2. 根據開價、內建估值、屋主底價進行攻防分析。
+        3. 當使用者在聊天框提問時，請基於「當前的物件報告」進行回答。
         """
         return genai.GenerativeModel(model_name=target, system_instruction=instruction)
     except: return None
 
 model = get_model()
 
-# --- 3. 介面設計 ---
+# --- 3. 側邊欄：歷史戰報 ---
+with st.sidebar:
+    st.title("📜 歷史戰報紀錄")
+    st.caption("點擊按鈕載入舊報告")
+    
+    if st.session_state.history:
+        for i, record in enumerate(reversed(st.session_state.history)):
+            # 按鈕顯示：時間 - 地址
+            btn_label = f"{record['time']} - {record['addr'][:6]}..."
+            if st.button(btn_label, key=f"hist_{i}"):
+                st.session_state.current_report = record['report']
+                # 強制刷新聊天紀錄，讓使用者針對舊報告提問
+                st.session_state.chat_history = [] 
+                st.info(f"已載入歷史報告：{record['addr']}")
+    else:
+        st.write("尚無生成紀錄")
+
+# --- 4. 主介面設計 ---
 st.title("🦅 HOUSE MANAGER")
-st.caption("鼎泰一不動產經紀有限公司 · 樂福集團 | 談判攻防戰略版")
+st.caption("鼎泰一不動產經紀有限公司 · 樂福集團 | 互動戰情版")
 
 # === A. ⚡ 智能地址快搜 ===
 st.markdown('<div class="ai-parser-box">', unsafe_allow_html=True)
-st.subheader("⚡ 智能地址快搜 (貼上整串地址，AI 自動填表)")
+st.subheader("⚡ 智能地址快搜 (貼上整串，AI 自動填表)")
 c_parse_1, c_parse_2 = st.columns([5, 1])
 with c_parse_1:
     raw_addr_input = st.text_input("輸入範例：台中市北屯區松竹路一段100巷5號12樓", key="raw_addr")
@@ -114,9 +135,8 @@ if do_parse and raw_addr_input and model:
             st.error("解析失敗，請手動輸入")
 st.markdown('</div>', unsafe_allow_html=True)
 
-# === B. 詳細門牌與地圖連動 ===
+# === B. 詳細門牌與地圖 ===
 st.markdown('<div class="section-title">📍 物件位置與實景</div>', unsafe_allow_html=True)
-
 col_L, col_R = st.columns([1, 1])
 
 with col_L:
@@ -153,6 +173,7 @@ if addr_sec: map_addr += f"{addr_sec}段"
 if addr_lane: map_addr += f"{addr_lane}巷"
 if addr_alley: map_addr += f"{addr_alley}弄"
 if addr_num: map_addr += f"{addr_num}號"
+full_addr_str = map_addr + (f"{addr_floor}樓" if addr_floor else "")
 
 with col_R:
     if road_name:
@@ -173,7 +194,6 @@ with col_R:
         with b_market:
             q_market = urllib.parse.quote(f"{map_addr} 市場 全聯")
             st.markdown(f'<a href="https://www.google.com/maps/search/{q_market}" target="_blank" class="action-btn btn-life">🥦 查市場</a>', unsafe_allow_html=True)
-
     else:
         st.info("👈 請輸入地址顯示地圖與機能按鈕")
 
@@ -208,13 +228,12 @@ with st.form("battle_room_form"):
     with price_cols[1]: internal_val = st.text_input("🔒 樂福內建估值 (萬)")
     with price_cols[2]: coop_status = st.text_input("合作狀況")
     
-    # --- 🆕 新增：攻防策略機密區 ---
-    st.markdown("##### 🔐 談判機密檔案 (攻防分析用)")
+    st.markdown("##### 🔐 談判機密檔案")
     secret_c1, secret_c2 = st.columns(2)
     with secret_c1:
-        owner_expect = st.text_input("屋主期望價格 (心中底價)", placeholder="選填，若知道請填入")
+        owner_expect = st.text_input("屋主期望價格 (心中底價)", placeholder="選填")
     with secret_c2:
-        past_offer = st.text_input("曾經出價紀錄 (下斡沒成)", placeholder="選填，市場驗證過的價格")
+        past_offer = st.text_input("曾經出價紀錄 (下斡沒成)", placeholder="選填")
 
     other_cols = st.columns(3)
     with other_cols[0]: c_age = st.text_input("屋齡")
@@ -223,10 +242,9 @@ with st.form("battle_room_form"):
 
     submitted = st.form_submit_button("🔥 啟動攻防戰略分析")
 
-# --- 4. AI 分析邏輯 ---
+# --- 5. AI 生成邏輯 ---
 if submitted:
     if model:
-        full_addr_str = map_addr + (f"{addr_floor}樓" if addr_floor else "")
         with st.spinner("🦁 金牌教練正在推演攻防戰術..."):
             try:
                 prompt = f"""
@@ -250,7 +268,57 @@ if submitted:
                    - 提供下一步的議價策略(如何打破屋主堅持)與銷售策略(如何說服新買家)。
                 """
                 response = model.generate_content(prompt)
-                st.info(f"📍 分析目標：{full_addr_str}")
-                st.markdown(response.text)
+                
+                # 儲存到當前報告
+                st.session_state.current_report = response.text
+                
+                # 儲存到歷史紀錄 (加入時間戳記)
+                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+                st.session_state.history.append({
+                    "time": timestamp,
+                    "addr": full_addr_str,
+                    "report": response.text
+                })
+                
+                # 清空舊對話，開始新對話
+                st.session_state.chat_history = []
+                
             except Exception as e:
                 st.error(f"分析中斷：{e}")
+
+# --- 6. 報告顯示與對話視窗 (Chatbot) ---
+if st.session_state.current_report:
+    st.markdown("---")
+    st.subheader("📋 戰略報告")
+    st.info(f"📍 分析物件：{full_addr_str}")
+    st.markdown(st.session_state.current_report)
+    
+    st.markdown("---")
+    st.subheader("💬 與金牌教練對話 (針對本案追問)")
+    
+    # 顯示對話紀錄
+    for msg in st.session_state.chat_history:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+            
+    # 對話輸入框
+    if user_input := st.chat_input("向教練提問 (例如：屋主如果堅持不降價怎麼辦？)"):
+        # 1. 顯示使用者訊息
+        with st.chat_message("user"):
+            st.markdown(user_input)
+        st.session_state.chat_history.append({"role": "user", "content": user_input})
+        
+        # 2. AI 回答
+        with st.chat_message("assistant"):
+            with st.spinner("教練思考中..."):
+                chat_prompt = f"""
+                以下是當前的房產分析報告：
+                {st.session_state.current_report}
+                
+                使用者現在問：{user_input}
+                
+                請基於報告內容，以樂福金牌教練的身分回答。
+                """
+                chat_resp = model.generate_content(chat_prompt)
+                st.markdown(chat_resp.text)
+                st.session_state.chat_history.append({"role": "assistant", "content": chat_resp.text})
