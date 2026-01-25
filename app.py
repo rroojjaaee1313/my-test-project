@@ -4,8 +4,19 @@ import urllib.parse
 import json
 import datetime
 import pandas as pd
+# 新增：Google Sheets 連線套件
+try:
+    import gspread
+    from oauth2client.service_account import ServiceAccountCredentials
+    GSHEETS_AVAILABLE = True
+except ImportError:
+    GSHEETS_AVAILABLE = False
 
-# --- 1. 資料庫 (核心地段資料) ---
+# --- 0. 系統基本設定 ---
+TEAM_MEMBERS = ["店長", "林小明", "陳大華", "張美美", "王大砲", "新進同仁"]
+ADMIN_PASSWORD = "Love168"
+
+# --- 1. 資料庫 (完整行政區) ---
 POSTAL_DATA = {
     "臺中市": {"中區": "400", "東區": "401", "南區": "402", "西區": "403", "北區": "404", "北屯區": "406", "西屯區": "407", "南屯區": "408", "太平區": "411", "大里區": "412", "霧峰區": "413", "烏日區": "414", "豐原區": "420", "后里區": "421", "石岡區": "422", "東勢區": "423", "新社區": "424", "潭子區": "427", "大雅區": "428", "神岡區": "429", "大肚區": "432", "沙鹿區": "433", "龍井區": "434", "梧棲區": "435", "清水區": "436", "大甲區": "437", "外埔區": "438", "大安區": "439", "和平區": "426"},
     "臺北市": {"中正區": "100", "大同區": "103", "中山區": "104", "松山區": "105", "大安區": "106", "萬華區": "108", "信義區": "110", "士林區": "111", "北投區": "112", "內湖區": "114", "南港區": "115", "文山區": "116"},
@@ -34,184 +45,265 @@ POSTAL_DATA = {
 # --- 2. 系統初始化 ---
 st.set_page_config(page_title="樂福集團 HOUSE MANAGER", layout="wide", page_icon="🦅")
 
-# 初始化日誌 (模擬資料庫)
-if 'usage_logs' not in st.session_state:
-    st.session_state.usage_logs = []
-if 'addr_data' not in st.session_state:
-    st.session_state.addr_data = {"city": "", "dist": "", "road": "", "sec": "", "lane": "", "alley": "", "no": "", "floor": ""}
+# 初始化 State
+if 'logged_in' not in st.session_state: st.session_state.logged_in = False
+if 'current_user' not in st.session_state: st.session_state.current_user = ""
+if 'usage_logs' not in st.session_state: st.session_state.usage_logs = []
+if 'addr_data' not in st.session_state: st.session_state.addr_data = {"city": "", "dist": "", "road": "", "sec": "", "lane": "", "alley": "", "no": "", "floor": ""}
+if 'history' not in st.session_state: st.session_state.history = []
+if 'chat_history' not in st.session_state: st.session_state.chat_history = []
+if 'current_report' not in st.session_state: st.session_state.current_report = ""
 
-# CSS 高質感底線風格
+# CSS
 st.markdown("""
     <style>
     .stTextInput>div>div>input, .stSelectbox>div>div>div { background-color: transparent; border: none; border-bottom: 2px solid #1e3a8a; border-radius: 0px; padding: 5px 0px; }
     .section-title { color: #334155; border-left: 5px solid #1e3a8a; padding-left: 15px; margin-top: 20px; font-weight: bold; font-size: 1.25rem; }
     .action-btn { display: inline-block; width: 100%; text-align: center; padding: 10px; margin: 5px 0; border-radius: 8px; text-decoration: none; color: white; font-weight: bold; }
     .btn-street { background-color: #FFC107; color: black; }
-    .stRadio>div{gap: 20px;}
+    .key-factor-box { background-color: #fff7ed; padding: 15px; border-radius: 10px; border: 1px solid #fdba74; margin-bottom: 15px; }
+    .login-container { max-width: 400px; margin: 50px auto; padding: 40px; border: 1px solid #e0e0e0; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); text-align: center;}
+    .alert-box { background-color: #fecaca; padding: 10px; border-radius: 5px; color: #7f1d1d; border: 1px solid #f87171; margin-bottom: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
+# --- 3. Google Sheets 連結設定 (未設定前會使用本地暫存) ---
+@st.cache_resource
+def get_google_sheet_client():
+    if not GSHEETS_AVAILABLE: return None
+    try:
+        # 請在 Streamlit Secrets 中設定 gcp_service_account
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(
+            st.secrets["gcp_service_account"],
+            ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        )
+        client = gspread.authorize(creds)
+        return client
+    except Exception:
+        return None
+
+# 讀取歷史回報
+def check_property_history(addr_str):
+    client = get_google_sheet_client()
+    if not client: return None
+    try:
+        sheet = client.open("LoveGroup_KB").sheet1
+        records = sheet.get_all_records()
+        df = pd.DataFrame(records)
+        # 簡單模糊比對
+        match = df[df['Address'].str.contains(addr_str, na=False)]
+        if not match.empty:
+            return match.to_dict('records')
+        return None
+    except:
+        return None
+
+# 寫入回報
+def save_property_report(data_dict):
+    client = get_google_sheet_client()
+    if not client: return # 如果沒設定就只存本地
+    try:
+        sheet = client.open("LoveGroup_KB").sheet1
+        sheet.append_row(list(data_dict.values()))
+    except:
+        pass
+
+# AI 模型
 @st.cache_resource
 def get_model():
     api_key = st.secrets.get("GEMINI_API_KEY")
     if not api_key: return None
     genai.configure(api_key=api_key)
-    # 【自動偵測模型 - 修正 NotFound 錯誤】
     try:
-        # 1. 取得所有可用模型
         models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        # 2. 優先嘗試 Flash, 若無則嘗試 Pro, 再無則選第一個
         target = 'models/gemini-1.5-flash'
-        if target not in models:
-            target = 'models/gemini-pro'
-            if target not in models and models:
-                target = models[0]
+        if target not in models: target = 'models/gemini-pro'
+        if target not in models and models: target = models[0]
         return genai.GenerativeModel(model_name=target)
-    except:
-        return None
+    except: return None
 
 model = get_model()
 
-# --- 3. 側邊欄：導航與管理員專區 ---
+# --- 4. 側邊欄與登入 ---
 with st.sidebar:
     st.title("🦅 戰情選單")
-    nav = st.radio("前往頁面", ["🎯 戰報生成器", "📊 管理儀表板"])
-    
-    if nav == "📊 管理儀表板":
+    if st.session_state.logged_in:
+        st.write(f"👤 經紀人：**{st.session_state.current_user}**")
+        nav = st.radio("功能切換", ["🎯 戰報生成器", "📊 管理儀表板"])
+        if st.button("登出切換"):
+            st.session_state.logged_in = False
+            st.rerun()
+        if nav == "📊 管理儀表板":
+            st.markdown("---")
+            if st.text_input("輸入管理密碼", type="password") != ADMIN_PASSWORD:
+                st.error("🔒 權限不足"); st.stop()
         st.markdown("---")
-        pwd = st.text_input("輸入管理員密碼", type="password")
-        if pwd != "Love168": # 這是您的管理密碼
-            st.error("🔒 請輸入正確密碼")
-            st.stop()
+        if st.session_state.history:
+            st.caption("📜 歷史紀錄")
+            for i, r in enumerate(reversed(st.session_state.history)):
+                if st.button(f"{r['time']} - {r['addr'][:5]}", key=f"h_{i}"):
+                    st.session_state.current_report = r['report']
+                    st.session_state.chat_history = [] 
+    else: nav = "LOGIN"
 
-# --- 4. 介面 A：戰報生成器 (分流邏輯) ---
+if not st.session_state.logged_in:
+    c1, c2, c3 = st.columns([1, 2, 1])
+    with c2:
+        st.markdown("<div class='login-container'>", unsafe_allow_html=True)
+        st.markdown("## 🦅 樂福 AI 戰情室")
+        st.caption("請打卡登入以使用系統")
+        with st.form("login_form"):
+            user = st.selectbox("請選擇您的姓名", TEAM_MEMBERS)
+            if st.form_submit_button("🚀 上班打卡", use_container_width=True):
+                st.session_state.logged_in = True
+                st.session_state.current_user = user
+                st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
+    st.stop()
+
+# --- 5. 主程式 ---
 if nav == "🎯 戰報生成器":
     st.title("🦅 HOUSE MANAGER AI")
-    
-    # 【核心分流選擇】
-    battle_type = st.radio("⚔️ 請選擇目前的任務：", ["🛡️ 開發/議價 (對屋主)", "🏹 銷售/包裝 (對買方)"], horizontal=True)
+    battle_type = st.radio("⚔️ 任務模式", ["🛡️ 開發/議價 (對屋主)", "🏹 銷售/包裝 (對買方)"], horizontal=True)
 
-    # 1. 智能解析
+    # 解析
     st.markdown('<div style="background:#f0f9ff; padding:15px; border-radius:10px; margin-bottom:15px;">', unsafe_allow_html=True)
-    raw_addr = st.text_input("⚡ 智能地址快搜 (直接貼上地址)")
-    if st.button("🔍 AI 解析地址"):
+    raw_addr = st.text_input("⚡ 智能地址快搜 (整串貼上)")
+    if st.button("🔍 AI 解析"):
         if model and raw_addr:
             try:
                 resp = model.generate_content(f"將此地址拆解為JSON (city, dist, road, sec, lane, alley, no, floor): {raw_addr}。只回傳JSON。")
                 st.session_state.addr_data.update(json.loads(resp.text.replace('```json','').replace('```','')))
                 st.success("✅ 解析成功")
-            except:
-                st.error("解析失敗，請手動輸入")
+            except: st.error("解析失敗")
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # 2. 基本資料與地圖
-    st.markdown('<div class="section-title">📍 物件位置與地圖</div>', unsafe_allow_html=True)
+    # 地圖
+    st.markdown('<div class="section-title">📍 物件位置</div>', unsafe_allow_html=True)
     c1, c2, c3 = st.columns([1, 1, 2])
     with c1: 
-        # 這裡做自動對應選單
-        current_city = st.session_state.addr_data['city']
-        sel_city = st.selectbox("城市", list(POSTAL_DATA.keys()), index=list(POSTAL_DATA.keys()).index(current_city) if current_city in POSTAL_DATA else 0)
+        curr_city = st.session_state.addr_data.get('city', '')
+        sel_city = st.selectbox("城市", list(POSTAL_DATA.keys()), index=list(POSTAL_DATA.keys()).index(curr_city) if curr_city in POSTAL_DATA else 0)
     with c2: 
-        current_dist = st.session_state.addr_data['dist']
-        dist_opts = list(POSTAL_DATA[sel_city].keys())
-        sel_dist = st.selectbox("區域", dist_opts, index=dist_opts.index(current_dist) if current_dist in dist_opts else 0)
-    with c3:
-        road = st.text_input("路街名", value=st.session_state.addr_data['road'])
+        curr_dist = st.session_state.addr_data.get('dist', '')
+        opts = list(POSTAL_DATA[sel_city].keys())
+        sel_dist = st.selectbox("區域", opts, index=opts.index(curr_dist) if curr_dist in opts else 0)
+    with c3: road = st.text_input("路街", value=st.session_state.addr_data.get('road', ''))
     
-    # 門牌細節
     r1, r2, r3, r4 = st.columns(4)
-    with r1: addr_sec = st.text_input("段", value=st.session_state.addr_data['sec'])
-    with r2: addr_lane = st.text_input("巷", value=st.session_state.addr_data['lane'])
-    with r3: addr_alley = st.text_input("弄", value=st.session_state.addr_data['alley'])
-    with r4: addr_no = st.text_input("號", value=st.session_state.addr_data['no'])
-
-    full_addr = f"{sel_city}{sel_dist}{road}{addr_sec+'段' if addr_sec else ''}{addr_lane+'巷' if addr_lane else ''}{addr_alley+'弄' if addr_alley else ''}{addr_no+'號' if addr_no else ''}"
+    with r1: sec = st.text_input("段", value=st.session_state.addr_data.get('sec', ''))
+    with r2: lane = st.text_input("巷", value=st.session_state.addr_data.get('lane', ''))
+    with r3: alley = st.text_input("弄", value=st.session_state.addr_data.get('alley', ''))
+    with r4: no = st.text_input("號", value=st.session_state.addr_data.get('no', ''))
+    full_addr = f"{sel_city}{sel_dist}{road}{sec+'段' if sec else ''}{lane+'巷' if lane else ''}{alley+'弄' if alley else ''}{no+'號' if no else ''}"
     
     if road:
-        q_url = urllib.parse.quote(full_addr)
-        st.markdown(f"""
-        <div style="border: 2px solid #1e3a8a; border-radius: 10px; overflow: hidden; margin: 10px 0;">
-            <iframe width="100%" height="250" frameborder="0" src="https://maps.google.com/maps?q={q_url}&output=embed"></iframe>
-        </div>
-        """, unsafe_allow_html=True)
-        st.markdown(f'<a href="https://www.google.com/maps/search/?api=1&query={q_url}" target="_blank" class="action-btn btn-street">👀 開啟 720° 現場實景</a>', unsafe_allow_html=True)
+        st.markdown(f'<a href="https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(full_addr)}" target="_blank" class="action-btn btn-street">👀 720° 街景 (Street View)</a>', unsafe_allow_html=True)
 
-    # 3. 根據分流顯示不同的表單
+        # 【知識庫讀取】 - 檢查歷史紀錄
+        history_records = check_property_history(full_addr)
+        if history_records:
+            st.markdown(f'<div class="alert-box">⚠️ 發現此物件有 {len(history_records)} 筆歷史回報！AI 已自動載入參考。</div>', unsafe_allow_html=True)
+            with st.expander("查看歷史回報細節"):
+                st.table(history_records)
+
+    # 表單
     with st.form("battle_form"):
-        st.markdown(f'<div class="section-title">📉 {battle_type} 專用欄位</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-title">📉 {battle_type} 核心參數</div>', unsafe_allow_html=True)
+        st.text_input("👤 經紀人", value=st.session_state.current_user, disabled=True)
+        c_price = st.text_input("💰 開價 (萬)")
+        c_name = st.text_input("🏢 社區 (選填)")
+
+        st.markdown('<div class="key-factor-box">', unsafe_allow_html=True)
+        st.markdown("#### 🔑 關鍵成交因子 (AI 讀心術)")
         
-        agent_name = st.text_input("👤 經紀人姓名")
-        c_price = st.text_input("💰 目前開價 (萬)")
-        c_name = st.text_input("🏢 社區名稱 (選填)")
-        
+        prompt_inject = ""
+        kb_data = {} # 準備存入知識庫的資料
+
         if "開發" in battle_type:
-            # 開發方專用
-            st.info("💡 任務：回報屋主 / 議價開發")
             col1, col2 = st.columns(2)
-            with col1: expect_price = st.text_input("屋主底價/期望 (萬)")
+            with col1: expect_price = st.text_input("屋主底價 (萬)")
             with col2: last_offer = st.text_input("最高出價紀錄 (萬)")
-            owner_mood = st.selectbox("屋主心態", ["強硬", "動搖", "急售", "試水溫"])
-            prompt_instruction = "重點：分析市場競品、打擊過高期望、提供議價理由。"
+            f1, f2 = st.columns(2)
+            with f1: sell_reason = st.selectbox("🔥 售屋動機", ["資金周轉/欠債 (極急)", "分家產/離婚 (急)", "換屋/移民 (中)", "資產配置 (不急)", "閒置資產 (不急)"])
+            with f2: owner_style = st.selectbox("🧠 屋主性格", ["講理/數據派", "固執/感覺派", "怕麻煩/授權派", "貪心/比價派"])
+            prompt_inject = f"屋主動機：{sell_reason}。性格：{owner_style}。請針對此動機設計『恐懼行銷』或『願景行銷』話術。"
+            kb_data = {"Type": "開發", "Price": expect_price, "Offer": last_offer, "Note": f"動機:{sell_reason}"}
+            
         else:
-            # 銷售方專用
-            st.success("💡 任務：包裝亮點 / 促成出價")
             col1, col2, col3 = st.columns(3)
-            with col1: main_area = st.text_input("主建物坪")
-            with col2: total_area = st.text_input("總建坪")
-            with col3: internal_val = st.text_input("🔒 內建估值")
-            buyer_focus = st.text_input("買方在意點 (例如: 採光)", placeholder="選填")
-            prompt_instruction = "重點：放大生活機能、學區優勢、消除買方抗性。"
+            with col1: total_ping = st.text_input("總坪數")
+            with col2: internal_val = st.text_input("🔒 內建估值")
+            with col3: buyer_type = st.selectbox("買方類型", ["首購族", "換屋族", "投資置產", "退休養老", "為子女置產"])
+            f1, f2 = st.columns(2)
+            with f1: trigger_point = st.selectbox("❤️ 成交觸發點", ["學區/教育", "交通便利/捷運", "離娘家/親友近", "生活機能", "價格/增值"])
+            with f2: concern_point = st.multiselect("🚧 核心抗性", ["價格太貴", "屋況/需整理", "地點/嫌遠", "格局/風水", "貸款/自備款"])
+            prompt_inject = f"買方是{buyer_type}。觸發點：{trigger_point}。抗性：{', '.join(concern_point)}。請將優點連結到觸發點，並用『重新定義』化解抗性。"
+            kb_data = {"Type": "銷售", "Price": c_price, "Valuation": internal_val, "Note": f"買方:{buyer_type}, 抗性:{concern_point}"}
+        
+        st.markdown('</div>', unsafe_allow_html=True)
 
         if st.form_submit_button("🔥 啟動 AI 戰略分析"):
             if model:
-                # 存入日誌
                 now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-                st.session_state.usage_logs.append({
-                    "時間": now, "經紀人": agent_name, "角色": battle_type, "地址": full_addr, "金額": c_price
-                })
+                # 1. 存入 Session Log
+                st.session_state.usage_logs.append({"時間": now, "經紀人": st.session_state.current_user, "角色": battle_type, "地址": full_addr, "金額": c_price})
                 
-                # AI 邏輯
-                with st.spinner("教練正在布陣..."):
+                # 2. 存入 Knowledge Base (如果已連線)
+                kb_full_data = {"Date": now, "Agent": st.session_state.current_user, "Address": full_addr, **kb_data}
+                save_property_report(kb_full_data)
+
+                # 3. AI 生成
+                with st.spinner("教練正在分析..."):
                     try:
+                        # 將歷史紀錄注入 Prompt
+                        history_context = ""
+                        if history_records:
+                            history_context = f"\n【⚠️ 重要情報：本物件有歷史回報紀錄】\n{history_records}\n請參考這些過去的情報，判斷屋主心態是否軟化，或市場是否有變化。\n"
+
                         prompt = f"""
-                        你是樂福集團金牌教練。身分是 {battle_type} 的助手。
+                        你是樂福集團金牌教練。身分：{battle_type} 顧問。
                         地址：{full_addr} ({c_name})。開價：{c_price}萬。
-                        {f'屋主期望：{expect_price}，最高出價：{last_offer}，心態：{owner_mood}' if "開發" in battle_type else f'主建：{main_area}，內建估值：{internal_val}，買方在意：{buyer_focus}'}
-                        
+                        {history_context}
+                        【關鍵人性分析】：{prompt_inject}
                         任務：
-                        1. 【環境掃描】：直接列出具體的「學區國小」、「學區國中」、「最近市場」、「最近公園」名稱。
-                        2. 【戰略分析】：{prompt_instruction}
-                        3. 【行動話術】：產出一段專業的對話或文案。
+                        1. 【環境掃描】：列出學區、市場、公園。
+                        2. 【人性戰略】：針對動機/抗性深度剖析。
+                        3. 【必殺話術】：提供直接對話稿。
                         """
                         resp = model.generate_content(prompt)
-                        st.markdown(resp.text)
-                    except Exception as e:
-                        st.error(f"分析失敗：{e}")
+                        st.session_state.current_report = resp.text
+                        st.session_state.history.append({"time": now, "addr": full_addr, "report": resp.text})
+                        st.session_state.chat_history = []
+                    except Exception as e: st.error(f"錯誤：{e}")
 
-# --- 5. 介面 B：管理儀表板 ---
+    if st.session_state.current_report:
+        st.markdown("---")
+        st.subheader(f"📋 戰略報告")
+        st.markdown(st.session_state.current_report)
+        st.markdown("---")
+        st.subheader("💬 戰情室對話")
+        for msg in st.session_state.chat_history:
+            with st.chat_message(msg["role"]): st.markdown(msg["content"])
+        if u_in := st.chat_input("追問..."):
+            with st.chat_message("user"): st.markdown(u_in)
+            st.session_state.chat_history.append({"role": "user", "content": u_in})
+            with st.chat_message("assistant"):
+                with st.spinner("..."):
+                    resp = model.generate_content(f"背景：{st.session_state.current_report}\n追問：{u_in}")
+                    st.markdown(resp.text)
+                    st.session_state.chat_history.append({"role": "assistant", "content": resp.text})
+
+# --- 6. 儀表板 ---
 elif nav == "📊 管理儀表板":
-    st.title("🔒 樂福管理員儀表板")
-    
-    if not st.session_state.usage_logs:
-        st.info("目前尚無使用紀錄")
-    else:
+    st.title("🔒 管理儀表板")
+    if st.session_state.usage_logs:
         df = pd.DataFrame(st.session_state.usage_logs)
-        
-        # 1. 統計數字
         c1, c2, c3 = st.columns(3)
-        c1.metric("總查詢次數", len(df))
-        c2.metric("活躍經紀人", len(df["經紀人"].unique()))
-        try:
-            top_area = df["地址"].apply(lambda x: x[:6] if len(x)>6 else x).mode()[0]
-        except:
-            top_area = "尚無數據"
-        c3.metric("最熱門區域", top_area)
-
-        # 2. 詳細列表
-        st.markdown("### 📝 詳細使用流水帳")
+        c1.metric("總次數", len(df))
+        c2.metric("活躍人數", len(df["經紀人"].unique()))
+        try: c3.metric("熱區", df["地址"].str[:6].mode()[0])
+        except: c3.metric("熱區", "-")
         st.dataframe(df, use_container_width=True)
-
-        # 3. 頻率分析
-        if not df.empty:
-            st.markdown("### 👤 經紀人排行")
-            st.bar_chart(df["經紀人"].value_counts())
+        st.bar_chart(df["經紀人"].value_counts())
+    else: st.info("無資料")
