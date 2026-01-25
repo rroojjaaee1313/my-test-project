@@ -4,7 +4,7 @@ import urllib.parse
 import json
 import datetime
 import pandas as pd
-# 新增：Google Sheets 連線套件
+# Google Sheets 連線
 try:
     import gspread
     from oauth2client.service_account import ServiceAccountCredentials
@@ -67,20 +67,18 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. Google Sheets 連結設定 (未設定前會使用本地暫存) ---
+# --- 3. Google Sheets 連線設定 ---
 @st.cache_resource
 def get_google_sheet_client():
     if not GSHEETS_AVAILABLE: return None
     try:
-        # 請在 Streamlit Secrets 中設定 gcp_service_account
         creds = ServiceAccountCredentials.from_json_keyfile_dict(
             st.secrets["gcp_service_account"],
             ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
         )
         client = gspread.authorize(creds)
         return client
-    except Exception:
-        return None
+    except Exception: return None
 
 # 讀取歷史回報
 def check_property_history(addr_str):
@@ -90,23 +88,21 @@ def check_property_history(addr_str):
         sheet = client.open("LoveGroup_KB").sheet1
         records = sheet.get_all_records()
         df = pd.DataFrame(records)
-        # 簡單模糊比對
+        # 比對地址 (包含樓層)
         match = df[df['Address'].str.contains(addr_str, na=False)]
         if not match.empty:
             return match.to_dict('records')
         return None
-    except:
-        return None
+    except: return None
 
 # 寫入回報
 def save_property_report(data_dict):
     client = get_google_sheet_client()
-    if not client: return # 如果沒設定就只存本地
+    if not client: return
     try:
         sheet = client.open("LoveGroup_KB").sheet1
         sheet.append_row(list(data_dict.values()))
-    except:
-        pass
+    except: pass
 
 # AI 模型
 @st.cache_resource
@@ -166,20 +162,21 @@ if nav == "🎯 戰報生成器":
     st.title("🦅 HOUSE MANAGER AI")
     battle_type = st.radio("⚔️ 任務模式", ["🛡️ 開發/議價 (對屋主)", "🏹 銷售/包裝 (對買方)"], horizontal=True)
 
-    # 解析
+    # A. 智能解析 (升級：含樓層)
     st.markdown('<div style="background:#f0f9ff; padding:15px; border-radius:10px; margin-bottom:15px;">', unsafe_allow_html=True)
-    raw_addr = st.text_input("⚡ 智能地址快搜 (整串貼上)")
+    raw_addr = st.text_input("⚡ 智能地址快搜 (包含樓層)", placeholder="例如：台中市北屯區松竹路一段1號12樓")
     if st.button("🔍 AI 解析"):
         if model and raw_addr:
             try:
-                resp = model.generate_content(f"將此地址拆解為JSON (city, dist, road, sec, lane, alley, no, floor): {raw_addr}。只回傳JSON。")
+                # Prompt 升級：增加 floor
+                resp = model.generate_content(f"將此地址拆解為JSON (city, dist, road, sec, lane, alley, no, floor): {raw_addr}。若無樓層則floor為空字串。只回傳JSON。")
                 st.session_state.addr_data.update(json.loads(resp.text.replace('```json','').replace('```','')))
                 st.success("✅ 解析成功")
             except: st.error("解析失敗")
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # 地圖
-    st.markdown('<div class="section-title">📍 物件位置</div>', unsafe_allow_html=True)
+    # B. 地址與樓層
+    st.markdown('<div class="section-title">📍 物件位置 (含樓層)</div>', unsafe_allow_html=True)
     c1, c2, c3 = st.columns([1, 1, 2])
     with c1: 
         curr_city = st.session_state.addr_data.get('city', '')
@@ -190,20 +187,31 @@ if nav == "🎯 戰報生成器":
         sel_dist = st.selectbox("區域", opts, index=opts.index(curr_dist) if curr_dist in opts else 0)
     with c3: road = st.text_input("路街", value=st.session_state.addr_data.get('road', ''))
     
-    r1, r2, r3, r4 = st.columns(4)
+    # 這裡調整為兩排，確保有空間放樓層
+    r1, r2, r3 = st.columns([1, 1, 1])
     with r1: sec = st.text_input("段", value=st.session_state.addr_data.get('sec', ''))
     with r2: lane = st.text_input("巷", value=st.session_state.addr_data.get('lane', ''))
     with r3: alley = st.text_input("弄", value=st.session_state.addr_data.get('alley', ''))
+    
+    r4, r5 = st.columns([1, 1])
     with r4: no = st.text_input("號", value=st.session_state.addr_data.get('no', ''))
+    # 新增樓層欄位
+    with r5: floor = st.text_input("樓層 (例如: 12)", value=st.session_state.addr_data.get('floor', ''))
+    
+    # 組合完整地址 (含樓層)
     full_addr = f"{sel_city}{sel_dist}{road}{sec+'段' if sec else ''}{lane+'巷' if lane else ''}{alley+'弄' if alley else ''}{no+'號' if no else ''}"
+    if floor:
+        full_addr += f" {floor}樓"
     
     if road:
-        st.markdown(f'<a href="https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(full_addr)}" target="_blank" class="action-btn btn-street">👀 720° 街景 (Street View)</a>', unsafe_allow_html=True)
+        # 地圖查詢不需要樓層，只查建物位置
+        map_query_addr = full_addr.replace(f" {floor}樓", "")
+        st.markdown(f'<a href="https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(map_query_addr)}" target="_blank" class="action-btn btn-street">👀 720° 街景 (Street View)</a>', unsafe_allow_html=True)
 
-        # 【知識庫讀取】 - 檢查歷史紀錄
+        # 【知識庫讀取】 - 檢查歷史紀錄 (含樓層比對)
         history_records = check_property_history(full_addr)
         if history_records:
-            st.markdown(f'<div class="alert-box">⚠️ 發現此物件有 {len(history_records)} 筆歷史回報！AI 已自動載入參考。</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="alert-box">⚠️ 發現此物件 (含樓層) 有 {len(history_records)} 筆歷史回報！AI 已自動載入參考。</div>', unsafe_allow_html=True)
             with st.expander("查看歷史回報細節"):
                 st.table(history_records)
 
@@ -218,7 +226,7 @@ if nav == "🎯 戰報生成器":
         st.markdown("#### 🔑 關鍵成交因子 (AI 讀心術)")
         
         prompt_inject = ""
-        kb_data = {} # 準備存入知識庫的資料
+        kb_data = {}
 
         if "開發" in battle_type:
             col1, col2 = st.columns(2)
@@ -246,20 +254,19 @@ if nav == "🎯 戰報生成器":
         if st.form_submit_button("🔥 啟動 AI 戰略分析"):
             if model:
                 now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-                # 1. 存入 Session Log
+                # 存入 Session Log
                 st.session_state.usage_logs.append({"時間": now, "經紀人": st.session_state.current_user, "角色": battle_type, "地址": full_addr, "金額": c_price})
                 
-                # 2. 存入 Knowledge Base (如果已連線)
+                # 存入 Knowledge Base
                 kb_full_data = {"Date": now, "Agent": st.session_state.current_user, "Address": full_addr, **kb_data}
                 save_property_report(kb_full_data)
 
-                # 3. AI 生成
+                # AI 生成
                 with st.spinner("教練正在分析..."):
                     try:
-                        # 將歷史紀錄注入 Prompt
                         history_context = ""
                         if history_records:
-                            history_context = f"\n【⚠️ 重要情報：本物件有歷史回報紀錄】\n{history_records}\n請參考這些過去的情報，判斷屋主心態是否軟化，或市場是否有變化。\n"
+                            history_context = f"\n【⚠️ 重要情報：本物件(含樓層)有歷史回報紀錄】\n{history_records}\n請參考這些過去的情報，判斷屋主心態是否軟化，或市場是否有變化。\n"
 
                         prompt = f"""
                         你是樂福集團金牌教練。身分：{battle_type} 顧問。
